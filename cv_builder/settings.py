@@ -84,7 +84,11 @@ DATABASES = {
 }
 
 
-
+ALLOWED_DOCUMENT_TYPES = [
+    'application/pdf',
+    'image/jpeg',
+    'image/png'
+]
 
 
 
@@ -107,6 +111,8 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://cvbuilder.tech",
+    "https://www.cvbuilder.tech",
 ]
 
 CORS_ALLOW_METHODS = [
@@ -138,7 +144,20 @@ CORS_ALLOWED_ORIGINS_WEBSOCKET = [
     "wss://127.0.0.1:3000",
     "ws://localhost:8000",
     "ws://127.0.0.1:8000",
+    "wss://cvbuilder.tech",
+    "wss://www.cvbuilder.tech",
+    "wss://web-production-9f41e.up.railway.app",
 ]
+
+CSRF_COOKIE_SECURE = True  # HTTPS üzerinden
+SESSION_COOKIE_SECURE = True  # HTTPS üzerinden
+CSRF_COOKIE_SAMESITE = 'Lax'  # veya 'None' (HTTPS gerektirir)
+SESSION_COOKIE_SAMESITE = 'Lax'  # veya 'None' (HTTPS gerektirir)
+
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Storage ayarları
 STORAGES = {
@@ -296,8 +315,29 @@ CHANNEL_AUTHENTICATION = {
 
 # WebSocket için güvenlik ayarları
 CHANNEL_SECURITY = {
-    'ALLOWED_HOSTS': ['*'],
-    'ALLOWED_ORIGINS': ['*'],
+    'ALLOWED_HOSTS': [
+        'localhost',
+        '127.0.0.1',
+        'cvbuilder.tech',
+        'www.cvbuilder.tech',
+        'web-production-9f41e.up.railway.app',
+    ],
+    'ALLOWED_ORIGINS': [
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'https://cvbuilder.tech',
+        'https://www.cvbuilder.tech',
+        'https://web-production-9f41e.up.railway.app',
+        'ws://localhost:3000',
+        'ws://127.0.0.1:3000',
+        'wss://localhost:3000',
+        'wss://127.0.0.1:3000',
+        'ws://localhost:8000',
+        'ws://127.0.0.1:8000',
+        'wss://cvbuilder.tech',
+        'wss://www.cvbuilder.tech',
+        'wss://web-production-9f41e.up.railway.app',
+    ],
 }
 
 
