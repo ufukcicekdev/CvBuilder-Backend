@@ -883,7 +883,7 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
         except Exception as e:
             return Response(
                 {'error': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_400_BAD_REQUEST
             )
 
     @action(detail=True, methods=['post'], url_path='upload-video')
@@ -1567,3 +1567,9 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
             self._notify_cv_update(cv, current_lang)
             
             return Response(self._get_translated_data(cv, current_lang))
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
