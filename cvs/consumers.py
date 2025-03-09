@@ -220,6 +220,11 @@ class CVConsumer(AsyncWebsocketConsumer):
             print(f"  Updated At: {message.get('updated_at')}")
             print(f"  Action: {message.get('action')}")
             
+            # Bu bir update mesajı olduğuna dair özel alan ekleyelim
+            message['_websocket_update'] = True
+            message['_update_timestamp'] = str(timezone.now().timestamp())
+            message['_channel_name'] = self.channel_name
+            
             # Mesajı JSON formatında gönder
             try:
                 json_message = json.dumps(message)
@@ -245,10 +250,29 @@ class CVConsumer(AsyncWebsocketConsumer):
                 print(f"WebSocket connection state: {self.scope.get('state', 'unknown')}")
                 print(f"WebSocket client: {self.scope.get('client', 'unknown')}")
             
-            # Mesajı gönder
-            print(f"Sending message to client: {self.channel_name}")
-            await self.send(text_data=json_message)
-            print("CV update sent to client successfully")
+            # Doğrudan client'a gönderme dene (ping yaklaşımı gibi)
+            try:
+                print(f"Sending CV update directly to client: {self.channel_name}")
+                # Mesajı gönder
+                await self.send(text_data=json_message)
+                print("CV update sent to client successfully (direct method)")
+            except Exception as direct_error:
+                print(f"Error sending CV update directly to client: {str(direct_error)}")
+                # Tekrar deneyelim, basitleştirilmiş veri ile
+                try:
+                    simple_message = {
+                        'id': message.get('id'),
+                        'title': message.get('title'),
+                        'action': 'fallback_update',
+                        'message': 'CV updated but full data could not be sent. Please refresh.',
+                        '_websocket_update': True,
+                        '_fallback': True
+                    }
+                    await self.send(text_data=json.dumps(simple_message))
+                    print("Fallback message sent to client")
+                except Exception as fallback_error:
+                    print(f"Error sending fallback message: {str(fallback_error)}")
+            
             print("="*50)
         except Exception as e:
             print(f"Error sending CV update to client: {str(e)}")

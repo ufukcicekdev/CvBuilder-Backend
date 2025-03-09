@@ -407,6 +407,15 @@ class CVBaseMixin:
                     print(f"Channel layer type: {type(channel_layer).__name__}")
                     print(f"Group name: {group_name}")
                     
+                    # Grup bilgilerine bakalım
+                    # groups = channel_layer.groups if hasattr(channel_layer, 'groups') else {}
+                    # print(f"Groups in channel layer: {groups.keys() if isinstance(groups, dict) else 'Not accessible'}")
+                    
+                    # Doğrudan client'a mesaj göndermeyi deneyelim
+                    # Tüm mevcut channel'ları kontrol et
+                    # channels = channel_layer.channels if hasattr(channel_layer, 'channels') else {}
+                    # print(f"Channels in channel layer: {channels.keys() if isinstance(channels, dict) else 'Not accessible'}")
+                    
                     async_to_sync(channel_layer.group_send)(
                         group_name,
                         {
@@ -416,21 +425,24 @@ class CVBaseMixin:
                     )
                     
                     print("WebSocket notification sent to channel layer")
-                    print("Groups in channel layer:")
-                    print(f"  Current group: {group_name}")
                     print("="*50)
+                    
+                    # İşlem başarılı
+                    print("WebSocket bildirimi başarıyla gönderildi")
+                    return True
                 except Exception as channel_error:
                     print(f"Error sending to channel layer: {str(channel_error)}")
                     print(f"Channel layer details: {dir(channel_layer)}")
-                    
-                print("WebSocket bildirimi başarıyla gönderildi")
+                    return False
             else:
                 print("Çeviri bulunamadı, WebSocket bildirimi gönderilemiyor")
+                return False
                 
         except Exception as e:
             print(f"WebSocket bildirimi gönderilirken hata oluştu: {str(e)}")
             import traceback
             traceback.print_exc()
+            return False
 
 class CVListCreateView(generics.ListCreateAPIView):
     serializer_class = CVSerializer
@@ -607,10 +619,64 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
         template_id = request.data.get('template_id', 'web-template1')
         print(f"Template ID: {template_id}")
         
-        # WebSocket bildirimi gönder
-        self._notify_cv_update(instance, current_lang, template_id)
+        # Güncellenmiş CV verilerini al
+        cv_data = self._get_translated_data(instance, current_lang)
+        print("Güncellenmiş CV verileri alındı")
         
-        return Response(self._get_translated_data(instance, current_lang))
+        # WebSocket bildirimi gönder
+        success = self._notify_cv_update(instance, current_lang, template_id)
+        
+        # Bildirim başarısız olduysa doğrudan channel layer kullanarak dene
+        if not success:
+            print("Alternatif websocket bildirim yöntemi deneniyor...")
+            try:
+                # Güncel verileri hazırla
+                # cv_data zaten Response objesi olabilir, dict'e çevirelim
+                if hasattr(cv_data, 'data'):
+                    data_dict = cv_data.data
+                else:
+                    data_dict = cv_data
+                
+                # Channel layer ve grup adını al
+                from channels.layers import get_channel_layer
+                channel_layer = get_channel_layer()
+                group_name = get_cv_group_name(instance.id, instance.translation_key, current_lang, template_id)
+                
+                print(f"Alternatif yöntem için grup adı: {group_name}")
+                
+                # Tüm consumer'lara doğrudan mesaj gönder
+                from asgiref.sync import async_to_sync
+                async_to_sync(channel_layer.group_send)(
+                    group_name,
+                    {
+                        'type': 'cv_update',
+                        'message': {
+                            'id': instance.id,
+                            'template_id': template_id,
+                            'title': instance.title,
+                            'language': current_lang,
+                            'personal_info': data_dict.get('personal_info', {}),
+                            'education': data_dict.get('education', []),
+                            'experience': data_dict.get('experience', []),
+                            'skills': data_dict.get('skills', []),
+                            'languages': data_dict.get('languages', []),
+                            'certificates': data_dict.get('certificates', []),
+                            'video_info': data_dict.get('video_info', {}),
+                            'created_at': instance.created_at.isoformat() if instance.created_at else None,
+                            'updated_at': instance.updated_at.isoformat() if instance.updated_at else None,
+                            'translation_key': instance.translation_key,
+                            'action': 'direct_update',  # Doğrudan güncelleme olduğunu belirt
+                            'timestamp': str(timezone.now().timestamp())
+                        }
+                    }
+                )
+                print("Alternatif websocket bildirimi başarıyla gönderildi")
+            except Exception as e:
+                print(f"Alternatif websocket bildirimi gönderilirken hata oluştu: {str(e)}")
+                import traceback
+                traceback.print_exc()
+        
+        return Response(cv_data)
 
     def patch(self, request, *args, **kwargs):
         print("="*50)
@@ -1137,10 +1203,64 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
         template_id = request.data.get('template_id', 'web-template1')
         print(f"Template ID: {template_id}")
         
-        # WebSocket bildirimi gönder
-        self._notify_cv_update(instance, current_lang, template_id)
+        # Güncellenmiş CV verilerini al
+        cv_data = self._get_translated_data(instance, current_lang)
+        print("Güncellenmiş CV verileri alındı")
         
-        return Response(self._get_translated_data(instance, current_lang))
+        # WebSocket bildirimi gönder
+        success = self._notify_cv_update(instance, current_lang, template_id)
+        
+        # Bildirim başarısız olduysa doğrudan channel layer kullanarak dene
+        if not success:
+            print("Alternatif websocket bildirim yöntemi deneniyor...")
+            try:
+                # Güncel verileri hazırla
+                # cv_data zaten Response objesi olabilir, dict'e çevirelim
+                if hasattr(cv_data, 'data'):
+                    data_dict = cv_data.data
+                else:
+                    data_dict = cv_data
+                
+                # Channel layer ve grup adını al
+                from channels.layers import get_channel_layer
+                channel_layer = get_channel_layer()
+                group_name = get_cv_group_name(instance.id, instance.translation_key, current_lang, template_id)
+                
+                print(f"Alternatif yöntem için grup adı: {group_name}")
+                
+                # Tüm consumer'lara doğrudan mesaj gönder
+                from asgiref.sync import async_to_sync
+                async_to_sync(channel_layer.group_send)(
+                    group_name,
+                    {
+                        'type': 'cv_update',
+                        'message': {
+                            'id': instance.id,
+                            'template_id': template_id,
+                            'title': instance.title,
+                            'language': current_lang,
+                            'personal_info': data_dict.get('personal_info', {}),
+                            'education': data_dict.get('education', []),
+                            'experience': data_dict.get('experience', []),
+                            'skills': data_dict.get('skills', []),
+                            'languages': data_dict.get('languages', []),
+                            'certificates': data_dict.get('certificates', []),
+                            'video_info': data_dict.get('video_info', {}),
+                            'created_at': instance.created_at.isoformat() if instance.created_at else None,
+                            'updated_at': instance.updated_at.isoformat() if instance.updated_at else None,
+                            'translation_key': instance.translation_key,
+                            'action': 'direct_update',  # Doğrudan güncelleme olduğunu belirt
+                            'timestamp': str(timezone.now().timestamp())
+                        }
+                    }
+                )
+                print("Alternatif websocket bildirimi başarıyla gönderildi")
+            except Exception as e:
+                print(f"Alternatif websocket bildirimi gönderilirken hata oluştu: {str(e)}")
+                import traceback
+                traceback.print_exc()
+        
+        return Response(cv_data)
 
     def create(self, request, *args, **kwargs):
         # Gelen veriyi al
