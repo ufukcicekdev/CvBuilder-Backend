@@ -317,29 +317,29 @@ class CVBaseMixin:
     def _notify_cv_update(self, cv, lang, template_id='1'):
         """CV güncellendiğinde WebSocket üzerinden bildirim gönder"""
         try:
-            print("="*50)
-            print(f"_notify_cv_update çağrıldı: cv_id={cv.id}, lang={lang}, template_id={template_id}")
+            # print("="*50)
+            # print(f"_notify_cv_update çağrıldı: cv_id={cv.id}, lang={lang}, template_id={template_id}")
             
             # Grup adı oluşturma detayları
-            print(f"Grup adı oluşturma detayları:")
-            print(f"  cv.id: {cv.id}")
-            print(f"  cv.translation_key: {cv.translation_key}")
-            print(f"  lang: {lang}")
-            print(f"  template_id: {template_id}")
+            # print(f"Grup adı oluşturma detayları:")
+            # print(f"  cv.id: {cv.id}")
+            # print(f"  cv.translation_key: {cv.translation_key}")
+            # print(f"  lang: {lang}")
+            # print(f"  template_id: {template_id}")
             
             channel_layer = get_channel_layer()
             group_name = get_cv_group_name(cv.id, cv.translation_key, lang, template_id)
             
-            print(f"WebSocket group_name: {group_name}")
+            # print(f"WebSocket group_name: {group_name}")
             
             # Channel layer bilgilerini kontrol et
-            print(f"Channel layer type: {type(channel_layer).__name__}")
+            # print(f"Channel layer type: {type(channel_layer).__name__}")
             
             # Güncel CV verilerini al
             translation = cv.translations.filter(language_code=lang).first()
             if not translation:
                 translation = cv.translations.filter(language_code='en').first()
-                print(f"Çeviri bulunamadı, İngilizce çeviri kullanılıyor: {translation is not None}")
+                # print(f"Çeviri bulunamadı, İngilizce çeviri kullanılıyor: {translation is not None}")
             
             if translation:
                 data = {
@@ -371,25 +371,25 @@ class CVBaseMixin:
                 if cv.video_description:
                     data['video_info']['description'] = cv.video_description
 
-                print(f"WebSocket üzerinden bildirim gönderiliyor: {group_name}")
+                # print(f"WebSocket üzerinden bildirim gönderiliyor: {group_name}")
                 
                 # Gönderilecek mesajın içeriğini detaylı bir şekilde yazdır
-                print("Gönderilecek mesaj içeriği:")
-                print(f"  ID: {data['id']}")
-                print(f"  Template ID: {data['template_id']}")
-                print(f"  Title: {data['title']}")
-                print(f"  Language: {data['language']}")
-                print(f"  Translation Key: {data['translation_key']}")
-                print(f"  Updated At: {data['updated_at']}")
-                print(f"  Action: {data['action']}")
-                print(f"  Timestamp: {data['timestamp']}")
+                # print("Gönderilecek mesaj içeriği:")
+                # print(f"  ID: {data['id']}")
+                # print(f"  Template ID: {data['template_id']}")
+                # print(f"  Title: {data['title']}")
+                # print(f"  Language: {data['language']}")
+                # print(f"  Translation Key: {data['translation_key']}")
+                # print(f"  Updated At: {data['updated_at']}")
+                # print(f"  Action: {data['action']}")
+                # print(f"  Timestamp: {data['timestamp']}")
                 
                 # Mesajı JSON formatına dönüştür ve kontrol et
                 try:
                     json_data = json.dumps(data)
-                    print(f"JSON message length: {len(json_data)} bytes")
+                    # print(f"JSON message length: {len(json_data)} bytes")
                 except Exception as json_error:
-                    print(f"JSON serialization error: {str(json_error)}")
+                    # print(f"JSON serialization error: {str(json_error)}")
                     # Hata durumunda basitleştirilmiş veri gönder
                     data = {
                         'id': cv.id,
@@ -402,10 +402,10 @@ class CVBaseMixin:
                 
                 # WebSocket üzerinden bildirim gönder
                 try:
-                    print("="*50)
-                    print("Attempting to send WebSocket notification")
-                    print(f"Channel layer type: {type(channel_layer).__name__}")
-                    print(f"Group name: {group_name}")
+                    # print("="*50)
+                    # print("Attempting to send WebSocket notification")
+                    # print(f"Channel layer type: {type(channel_layer).__name__}")
+                    # print(f"Group name: {group_name}")
                     
                     # Grup bilgilerine bakalım
                     # groups = channel_layer.groups if hasattr(channel_layer, 'groups') else {}
@@ -424,24 +424,24 @@ class CVBaseMixin:
                         }
                     )
                     
-                    print("WebSocket notification sent to channel layer")
-                    print("="*50)
+                    # print("WebSocket notification sent to channel layer")
+                    # print("="*50)
                     
                     # İşlem başarılı
-                    print("WebSocket bildirimi başarıyla gönderildi")
+                    # print("WebSocket bildirimi başarıyla gönderildi")
                     return True
                 except Exception as channel_error:
-                    print(f"Error sending to channel layer: {str(channel_error)}")
-                    print(f"Channel layer details: {dir(channel_layer)}")
+                    # print(f"Error sending to channel layer: {str(channel_error)}")
+                    # print(f"Channel layer details: {dir(channel_layer)}")
                     return False
             else:
-                print("Çeviri bulunamadı, WebSocket bildirimi gönderilemiyor")
+                # print("Çeviri bulunamadı, WebSocket bildirimi gönderilemiyor")
                 return False
                 
         except Exception as e:
-            print(f"WebSocket bildirimi gönderilirken hata oluştu: {str(e)}")
+            # print(f"WebSocket bildirimi gönderilirken hata oluştu: {str(e)}")
             import traceback
-            traceback.print_exc()
+            # traceback.print_exc()
             return False
 
 class CVListCreateView(generics.ListCreateAPIView):
@@ -1567,246 +1567,3 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
             self._notify_cv_update(cv, current_lang)
             
             return Response(self._get_translated_data(cv, current_lang))
-            
-        except Exception as e:
-            return Response(
-                {'error': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    @action(detail=True, methods=['post'], url_path='upload-video')
-    def upload_video(self, request, pk=None):
-        try:
-            cv = self.get_object()
-            
-            if 'video' not in request.FILES:
-                return Response(
-                    {'error': 'No video file provided'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            video_file = request.FILES['video']
-            
-            # Video dosya tipi kontrolü
-            if not video_file.content_type.startswith('video/'):
-                return Response(
-                    {'error': f'Invalid file type: {video_file.content_type}. Only video files are allowed.'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Video boyut kontrolü (100MB)
-            if video_file.size > 100 * 1024 * 1024:
-                return Response(
-                    {'error': 'Video file is too large. Maximum size is 100MB.'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Eski videoyu sil
-            if cv.video:
-                cv.video.delete()
-            
-            cv.video = video_file
-            cv.video_description = request.data.get('video_description', '')
-            
-            # video_info alanını güncelle
-            cv.video_info = {
-                'url': cv.video.url if cv.video else None,
-                'description': cv.video_description,
-                'type': video_file.content_type,
-                'uploaded_at': timezone.now().isoformat()
-            }
-            
-            cv.save()
-            
-            # WebSocket bildirimi gönder
-            current_lang = self._get_language_code(request)
-            self._notify_cv_update(cv, current_lang)
-            
-            # Tüm CV verilerini serialize edip dön
-            serializer = self.get_serializer(cv)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            return Response(
-                {'error': f'Error uploading video: {str(e)}'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-    @action(detail=True, methods=['post'], url_path='translate')
-    def translate(self, request, pk=None):
-        try:
-            cv = self.get_object()
-            target_language = request.data.get('language')
-            
-            if not target_language:
-                return Response(
-                    {'error': 'Target language is required'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # CV verilerini hazırla
-            cv_data = {
-                'personal_info': cv.personal_info,
-                'education': cv.education,
-                'experience': cv.experience,
-                'skills': cv.skills,
-                'languages': cv.languages,
-                'certificates': [
-                    {
-                        'id': cert.id,
-                        'name': cert.name,
-                        'issuer': cert.issuer,
-                        'date': cert.date,
-                        'description': cert.description,
-                        'document': cert.document.url if cert.document else None,
-                        'document_type': cert.document_type,
-                    } for cert in cv.certificates.all()
-                ],
-            }
-            
-            # Çeviri servisini başlat
-            translation_service = TranslationService()
-            
-            # Çeviriyi yap
-            translated_content = translation_service.translate_cv_content(cv_data, target_language)
-            
-            # Çeviriyi kaydet
-            translation, created = CVTranslation.objects.update_or_create(
-                cv=cv,
-                language_id=request.data.get('language_id'),
-                defaults={'content': translated_content}
-            )
-            
-            serializer = CVTranslationSerializer(translation)
-            
-            return Response(serializer.data, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            return Response(
-                {'error': str(e)}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-    @action(detail=True, methods=['POST'], url_path='upload-certificate-document')
-    def upload_certificate_document(self, request, pk=None):
-        try:
-            cv = self.get_object()
-            file = request.FILES.get('file')
-            certificate_id = request.data.get('certificate_id')
-            
-            if not file or not certificate_id:
-                return Response(
-                    {'error': 'Both file and certificate_id are required'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Dosya tipini belirle
-            file_name = file.name.lower()
-            if file_name.endswith('.pdf'):
-                document_type = 'pdf'
-            elif any(file_name.endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif']):
-                document_type = 'image'
-            else:
-                return Response(
-                    {'error': 'Invalid file type. Only PDF and images are allowed.'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Dosyayı kaydet
-            file_path = f'certificates/{cv.id}/{certificate_id}/{file.name}'
-            storage = default_storage
-            if storage.exists(file_path):
-                storage.delete(file_path)
-            
-            file_path = storage.save(file_path, file)
-            file_url = storage.url(file_path)
-
-            # Sertifika bilgilerini güncelle
-            current_lang = self._get_language_code(request)
-            translation = cv.translations.filter(language_code=current_lang).first()
-            
-            if translation:
-                certificates = translation.certificates
-                for cert in certificates:
-                    if str(cert.get('id')) == str(certificate_id):
-                        cert['document_url'] = file_url
-                        cert['document_type'] = document_type
-                        break
-                
-                translation.certificates = certificates
-                translation.save()
-            
-            return Response({
-                'document_url': file_url,
-                'document_type': document_type
-            })
-            
-        except Exception as e:
-            return Response(
-                {'error': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    @action(detail=True, methods=['POST'], url_path='delete-certificate-document')
-    def delete_certificate_document(self, request, pk=None):
-        try:
-            cv = self.get_object()
-            certificate_id = request.data.get('certificate_id')
-            
-            if not certificate_id:
-                return Response(
-                    {'error': 'certificate_id is required'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Tüm dillerdeki çevirilerde sertifika dosyasını sil
-            for translation in cv.translations.all():
-                certificates = translation.certificates
-                for cert in certificates:
-                    if str(cert.get('id')) == str(certificate_id):
-                        # Dosyayı fiziksel olarak sil
-                        document_url = cert.get('document_url')
-                        if document_url:
-                            file_path = document_url.replace(settings.MEDIA_URL, '')
-                            storage = default_storage
-                            if storage.exists(file_path):
-                                storage.delete(file_path)
-                        
-                        # Dosya bilgilerini temizle
-                        cert['document_url'] = None
-                        cert['document_type'] = None
-                        break
-                
-                translation.certificates = certificates
-                translation.save()
-            
-            return Response({'status': 'success'})
-            
-        except Exception as e:
-            return Response(
-                {'error': str(e)}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )    
-    @action(detail=True, methods=['delete'], url_path='delete-video')
-    def delete_video(self, request, pk=None):
-        print("="*50)
-        print("VIDEO SİLME İSTEĞİ GELDİ")
-        print("CV ID:", pk)
-     
-        cv = self.get_object()
-        print("CV BULUNDU:", cv.id)
-        print("CV'nin videosu var mı?", bool(cv.video))
-        if cv.video:
-            print("Video URL:", cv.video.url)
-            print("Video açıklaması:", cv.video_description)
-            print("Video bilgileri:", cv.video_info)
-         
-            cv.video.delete()
-            cv.video_description = ''
-            cv.video_info = {}
-            cv.save()
-            print("Video silindi ve bilgiler temizlendi")
-            return Response(status=status.HTTP_204_NO_CONTENT)
-         
-        print("Video bulunamadı")
-        return Response({'error': 'Video not found'}, status=status.HTTP_404_NOT_FOUND)
