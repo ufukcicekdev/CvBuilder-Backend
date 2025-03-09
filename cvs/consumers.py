@@ -50,6 +50,29 @@ class CVConsumer(AsyncWebsocketConsumer):
             if cv_data:
                 await self.send(text_data=json.dumps(cv_data))
                 print("Initial CV data sent to client")
+                
+                # Bağlantı kurulduğunda gruba bir test mesajı gönder
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {
+                        'type': 'cv_update',
+                        'message': {
+                            'id': cv_data['id'],
+                            'title': cv_data['title'],
+                            'action': 'test_connection',
+                            'timestamp': str(timezone.now().timestamp()),
+                            'message': 'This is a test message to verify group messaging is working',
+                            'personal_info': cv_data['personal_info'],
+                            'education': cv_data['education'],
+                            'experience': cv_data['experience'],
+                            'skills': cv_data['skills'],
+                            'languages': cv_data['languages'],
+                            'certificates': cv_data['certificates'],
+                            'video_info': cv_data['video_info']
+                        }
+                    }
+                )
+                print("Test message sent to group after connection")
             else:
                 print("No CV data available to send")
                 await self.close()
@@ -313,12 +336,31 @@ class CVConsumer(AsyncWebsocketConsumer):
             return None
 
     async def send_ping(self):
-        """Her 30 saniyede bir ping gönder"""
+        """Her 30 saniyede bir ping gönder ve CV verilerini gönder"""
         try:
             while True:
                 await asyncio.sleep(30)
+                
+                # Normal ping mesajını gönder
                 await self.send(text_data="ping")
                 print(f"Ping sent to client: {self.channel_name}")
+                
+                # CV verilerini al
+                cv_data = await self.get_cv_data()
+                if cv_data:
+                    # CV verilerini mesaj olarak gönder
+                    try:
+                        # Mesajı JSON formatına dönüştür
+                        json_message = json.dumps(cv_data)
+                        
+                        # Ping ile birlikte CV verilerini gönder
+                        await self.send(text_data=json_message)
+                        print(f"CV data sent with ping: {self.channel_name}")
+                        print(f"CV data summary: id={cv_data.get('id')}, template_id={cv_data.get('template_id')}")
+                    except Exception as json_error:
+                        print(f"Error sending CV data with ping: {str(json_error)}")
+                else:
+                    print(f"No CV data available to send with ping")
         except asyncio.CancelledError:
             # Task iptal edildiğinde sessizce çık
             pass

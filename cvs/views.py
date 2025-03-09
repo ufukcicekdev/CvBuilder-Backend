@@ -401,14 +401,28 @@ class CVBaseMixin:
                     }
                 
                 # WebSocket üzerinden bildirim gönder
-                async_to_sync(channel_layer.group_send)(
-                    group_name,
-                    {
-                        'type': 'cv_update',
-                        'message': data
-                    }
-                )
-                
+                try:
+                    print("="*50)
+                    print("Attempting to send WebSocket notification")
+                    print(f"Channel layer type: {type(channel_layer).__name__}")
+                    print(f"Group name: {group_name}")
+                    
+                    async_to_sync(channel_layer.group_send)(
+                        group_name,
+                        {
+                            'type': 'cv_update',
+                            'message': data
+                        }
+                    )
+                    
+                    print("WebSocket notification sent to channel layer")
+                    print("Groups in channel layer:")
+                    print(f"  Current group: {group_name}")
+                    print("="*50)
+                except Exception as channel_error:
+                    print(f"Error sending to channel layer: {str(channel_error)}")
+                    print(f"Channel layer details: {dir(channel_layer)}")
+                    
                 print("WebSocket bildirimi başarıyla gönderildi")
             else:
                 print("Çeviri bulunamadı, WebSocket bildirimi gönderilemiyor")
