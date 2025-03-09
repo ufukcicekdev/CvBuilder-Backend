@@ -4,6 +4,7 @@ from channels.db import database_sync_to_async
 from .models import CV, CVTranslation
 import asyncio
 from .views import get_cv_group_name
+from django.utils import timezone
 
 class CVConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -137,8 +138,22 @@ class CVConsumer(AsyncWebsocketConsumer):
             print(f"  Updated At: {message.get('updated_at')}")
             
             # Mesajı JSON formatında gönder
-            json_message = json.dumps(message)
-            print(f"JSON message length: {len(json_message)} bytes")
+            try:
+                json_message = json.dumps(message)
+                print(f"JSON message length: {len(json_message)} bytes")
+            except TypeError as e:
+                print(f"JSON serialization error in cv_update: {str(e)}")
+                # Datetime nesnelerini string'e çevir
+                if 'created_at' in message and message['created_at'] is not None and not isinstance(message['created_at'], str):
+                    message['created_at'] = message['created_at'].isoformat() if hasattr(message['created_at'], 'isoformat') else str(message['created_at'])
+                if 'updated_at' in message and message['updated_at'] is not None and not isinstance(message['updated_at'], str):
+                    message['updated_at'] = message['updated_at'].isoformat() if hasattr(message['updated_at'], 'isoformat') else str(message['updated_at'])
+                if 'timestamp' in message and not isinstance(message['timestamp'], str):
+                    message['timestamp'] = str(message['timestamp'])
+                
+                # Tekrar dene
+                json_message = json.dumps(message)
+                print(f"JSON message length after fixing: {len(json_message)} bytes")
             
             # WebSocket bağlantı durumunu kontrol et
             if self.scope['type'] == 'websocket':
@@ -183,7 +198,9 @@ class CVConsumer(AsyncWebsocketConsumer):
                 'video_info': translation.video_info,
                 'created_at': cv.created_at.isoformat() if cv.created_at else None,
                 'updated_at': cv.updated_at.isoformat() if cv.updated_at else None,
-                'translation_key': cv.translation_key
+                'translation_key': cv.translation_key,
+                'action': 'initial',  # Başlangıç verisi olduğunu belirt
+                'timestamp': str(timezone.now().timestamp())  # Zaman damgası ekle
             }
 
             # Kullanıcının profil resmini ekle
@@ -203,6 +220,24 @@ class CVConsumer(AsyncWebsocketConsumer):
             print(f"  Language: {data['language']}")
             print(f"  Translation Key: {data['translation_key']}")
             print(f"  Updated At: {data['updated_at']}")
+            print(f"  Action: {data['action']}")
+            print(f"  Timestamp: {data['timestamp']}")
+            
+            # JSON serileştirme kontrolü
+            try:
+                json_data = json.dumps(data)
+                print(f"JSON message length: {len(json_data)} bytes")
+            except TypeError as e:
+                print(f"JSON serialization error in get_cv_data: {str(e)}")
+                # Basitleştirilmiş veri döndür
+                data = {
+                    'id': cv.id,
+                    'template_id': self.template_id,
+                    'title': cv.title,
+                    'language': translation.language_code,
+                    'action': 'initial',
+                    'timestamp': str(timezone.now())
+                }
             
             print("CV data retrieved successfully")
             print("="*50)

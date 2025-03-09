@@ -354,11 +354,11 @@ class CVBaseMixin:
                     'languages': translation.languages,
                     'certificates': translation.certificates,
                     'video_info': translation.video_info,
-                    'created_at': cv.created_at,
-                    'updated_at': cv.updated_at,
+                    'created_at': cv.created_at.isoformat() if cv.created_at else None,
+                    'updated_at': cv.updated_at.isoformat() if cv.updated_at else None,
                     'translation_key': cv.translation_key,
                     'action': 'update',  # Mesaj tipini belirt
-                    'timestamp': timezone.now().timestamp()  # Zaman damgası ekle
+                    'timestamp': str(timezone.now().timestamp())  # Zaman damgası ekle (string olarak)
                 }
 
                 # Kullanıcının profil resmini ekle
@@ -1077,8 +1077,8 @@ def get_cv_by_translation(request, id, translation_key, lang, template_id='1'):
             'languages': translation.languages,
             'certificates': translation.certificates,
             'video_info': translation.video_info,
-            'created_at': cv.created_at,
-            'updated_at': cv.updated_at,
+            'created_at': cv.created_at.isoformat() if cv.created_at else None,
+            'updated_at': cv.updated_at.isoformat() if cv.updated_at else None,
             'translation_key': cv.translation_key  # translation_key'i de ekleyelim
         }
 
