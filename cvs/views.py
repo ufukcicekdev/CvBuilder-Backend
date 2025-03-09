@@ -1053,6 +1053,8 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
         current_lang = self._get_language_code(request)
         
         self._update_cv_data(instance, request.data, current_lang)
+
+        self._notify_cv_update(instance, current_lang)
         return Response(self._get_translated_data(instance, current_lang))
 
     def create(self, request, *args, **kwargs):
