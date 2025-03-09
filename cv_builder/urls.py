@@ -8,6 +8,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from django.views.generic import TemplateView
 
 router = DefaultRouter()
 router.register(r'profiles', ProfileViewSet, basename='profile')
@@ -30,6 +31,8 @@ urlpatterns = [
     path('', include('social_django.urls', namespace='social')),
     path('api/contact/', include('contact.urls')),
     path('health/', health_check, name='health_check'),
+    # WebSocket test sayfası
+    path('websocket-test/', TemplateView.as_view(template_name='web/websocket_test.html'), name='websocket_test'),
     # CV translation endpoint
     path('cvs/<int:id>/<str:translation_key>/<str:lang>/', get_cv_by_translation, name='cv-by-translation'),
 ] 

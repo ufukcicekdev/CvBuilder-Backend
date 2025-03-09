@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #status {
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #f8f8f8;
+            border-left: 5px solid #4CAF50;
+        }
+        #messages {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #fff;
+            border-left: 3px solid #2196F3;
+        }
+        .error {
+            color: red;
+        }
+        .success {
+            color: green;
+        }
+        .button-group {
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebSocket Test</h1>
+        
+        <div class="form-group">
+            <label for="cv_id">CV ID:</label>
+            <input type="text" id="cv_id" value="1">
+        </div>
+        
+        <div class="form-group">
+            <label for="translation_key">Translation Key:</label>
+            <input type="text" id="translation_key" value="FhDxjI2ggpX5IqhDhosySfsOqorQxv">
+        </div>
+        
+        <div class="form-group">
+            <label for="lang">Language:</label>
+            <select id="lang">
+                <option value="tr">Turkish</option>
+                <option value="en">English</option>
+                <option value="es">Spanish</option>
+                <option value="zh">Chinese</option>
+                <option value="ar">Arabic</option>
+                <option value="hi">Hindi</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="template_id">Template ID:</label>
+            <input type="text" id="template_id" value="web-template1">
+        </div>
+        
+        <button id="connect">Connect</button>
+        <button id="disconnect">Disconnect</button>
+        
+        <div id="status">Status: Disconnected</div>
+        
+        <h2>Send Message</h2>
+        <div class="form-group">
+            <label for="message_type">Message Type:</label>
+            <select id="message_type">
+                <option value="string">String Message</option>
+                <option value="json">JSON Message</option>
+                <option value="ping">Ping</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="message_content">Message Content:</label>
+            <textarea id="message_content">Please send back CV data</textarea>
+        </div>
+        
+        <button id="send_message">Send Message</button>
+        
+        <h2>Messages</h2>
+        <div id="messages"></div>
+    </div>
+    
+    <script>
+        let websocket = null;
+        
+        // DOM elements
+        const connectBtn = document.getElementById('connect');
+        const disconnectBtn = document.getElementById('disconnect');
+        const sendMessageBtn = document.getElementById('send_message');
+        const statusDiv = document.getElementById('status');
+        const messagesDiv = document.getElementById('messages');
+        const messageTypeSelect = document.getElementById('message_type');
+        const messageContentTextarea = document.getElementById('message_content');
+        
+        // Connect to WebSocket
+        connectBtn.addEventListener('click', function() {
+            const cvId = document.getElementById('cv_id').value;
+            const translationKey = document.getElementById('translation_key').value;
+            const lang = document.getElementById('lang').value;
+            const templateId = document.getElementById('template_id').value;
+            
+            // Close existing connection
+            if (websocket) {
+                websocket.close();
+            }
+            
+            // Create WebSocket URL
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.host;
+            const wsUrl = `${protocol}//${host}/ws/cv/${templateId}/${cvId}/${translationKey}/${lang}/`;
+            
+            addMessage(`Connecting to WebSocket: ${wsUrl}`, 'info');
+            
+            // Create WebSocket connection
+            websocket = new WebSocket(wsUrl);
+            
+            // Connection opened
+            websocket.onopen = function(event) {
+                statusDiv.innerHTML = `Status: Connected to ${wsUrl}`;
+                statusDiv.className = 'success';
+                addMessage('WebSocket connection established', 'success');
+            };
+            
+            // Listen for messages
+            websocket.onmessage = function(event) {
+                addMessage(`Received message: ${event.data}`, 'info');
+                
+                try {
+                    const data = JSON.parse(event.data);
+                    addMessage(`Parsed message: ${JSON.stringify(data, null, 2)}`, 'success');
+                } catch (error) {
+                    addMessage(`Error parsing message: ${error}`, 'error');
+                }
+            };
+            
+            // Connection closed
+            websocket.onclose = function(event) {
+                statusDiv.innerHTML = 'Status: Disconnected';
+                statusDiv.className = '';
+                addMessage(`WebSocket connection closed with code: ${event.code}`, 'info');
+            };
+            
+            // Connection error
+            websocket.onerror = function(error) {
+                statusDiv.innerHTML = 'Status: Error';
+                statusDiv.className = 'error';
+                addMessage(`WebSocket error: ${error}`, 'error');
+            };
+        });
+        
+        // Disconnect from WebSocket
+        disconnectBtn.addEventListener('click', function() {
+            if (websocket) {
+                websocket.close();
+                websocket = null;
+                statusDiv.innerHTML = 'Status: Disconnected';
+                statusDiv.className = '';
+                addMessage('WebSocket disconnected', 'info');
+            }
+        });
+        
+        // Send message
+        sendMessageBtn.addEventListener('click', function() {
+            if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+                addMessage('WebSocket is not connected', 'error');
+                return;
+            }
+            
+            const messageType = messageTypeSelect.value;
+            const messageContent = messageContentTextarea.value;
+            
+            let message;
+            
+            if (messageType === 'string') {
+                message = messageContent;
+            } else if (messageType === 'json') {
+                try {
+                    message = JSON.parse(messageContent);
+                } catch (error) {
+                    addMessage(`Error parsing JSON: ${error}`, 'error');
+                    return;
+                }
+            } else if (messageType === 'ping') {
+                message = {
+                    type: 'ping',
+                    timestamp: Date.now()
+                };
+            }
+            
+            try {
+                const messageString = typeof message === 'string' ? message : JSON.stringify(message);
+                websocket.send(messageString);
+                addMessage(`Sent message: ${messageString}`, 'success');
+            } catch (error) {
+                addMessage(`Error sending message: ${error}`, 'error');
+            }
+        });
+        
+        // Add message to messages div
+        function addMessage(message, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            messageDiv.innerHTML = `<strong>${timestamp}</strong>: ${message}`;
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    </script>
+</body>
+</html> 

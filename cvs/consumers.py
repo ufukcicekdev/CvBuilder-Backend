@@ -91,27 +91,73 @@ class CVConsumer(AsyncWebsocketConsumer):
         print(f"Group name: {self.group_name}")
             
         try:
-            # Mesajı al ve gruba ilet
+            # Mesajı JSON olarak parse et
             text_data_json = json.loads(text_data)
-            message = text_data_json.get('message')
             
-            if not message:
-                print("Error: 'message' field not found in the received data")
+            # Mesaj tipini kontrol et
+            message_type = text_data_json.get('type')
+            
+            # Ping mesajı kontrolü
+            if message_type == 'ping':
+                print("Client ping received, sending pong")
+                await self.send(text_data=json.dumps({
+                    'type': 'pong',
+                    'timestamp': text_data_json.get('timestamp')
+                }))
                 return
             
-            print(f"Parsed message: {message}")
+            # Normal mesaj kontrolü
+            message = text_data_json.get('message')
             
+            # Mesaj alanı varsa
+            if message:
+                print(f"Parsed message: {message}")
+                
+                # Mesaj bir string ise
+                if isinstance(message, str):
+                    await self.channel_layer.group_send(
+                        self.group_name,
+                        {
+                            'type': 'cv_update',
+                            'message': message
+                        }
+                    )
+                    print("String message sent to group")
+                # Mesaj bir sözlük ise
+                else:
+                    await self.channel_layer.group_send(
+                        self.group_name,
+                        {
+                            'type': 'cv_update',
+                            'message': message
+                        }
+                    )
+                    print("Dictionary message sent to group")
+            else:
+                print("Warning: 'message' field not found in the received data")
+                # Eğer mesaj alanı yoksa, tüm veriyi mesaj olarak kabul et
+                if message_type != 'ping' and message_type != 'pong':
+                    await self.channel_layer.group_send(
+                        self.group_name,
+                        {
+                            'type': 'cv_update',
+                            'message': text_data_json
+                        }
+                    )
+                    print("Full JSON data sent to group as message")
+            
+            print("="*50)
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON: {str(e)}")
+            # JSON decode hatası durumunda, raw mesajı gönder
             await self.channel_layer.group_send(
                 self.group_name,
                 {
                     'type': 'cv_update',
-                    'message': message
+                    'message': text_data
                 }
             )
-            print("Message sent to group")
-            print("="*50)
-        except json.JSONDecodeError as e:
-            print(f"Error decoding JSON: {str(e)}")
+            print("Raw text sent to group as message")
         except Exception as e:
             print(f"Error processing message: {str(e)}")
             import traceback
@@ -121,13 +167,26 @@ class CVConsumer(AsyncWebsocketConsumer):
         try:
             print("="*50)
             print("Sending CV update to client")
+            print(f"Event data type: {type(event)}")
+            print(f"Event keys: {event.keys()}")
             print(f"Event data: {event}")
             print(f"Channel name: {self.channel_name}")
             print(f"Group name: {self.group_name}")
             
             # Güncel CV verilerini gönder
             message = event['message']
+            print(f"Message type: {type(message)}")
             
+            # Mesaj bir string ise
+            if isinstance(message, str):
+                print(f"Message content (string): {message}")
+                # String mesajı doğrudan gönder
+                await self.send(text_data=json.dumps({"message": message, "type": "string_message"}))
+                print("String message sent to client successfully")
+                print("="*50)
+                return
+            
+            # Mesaj bir sözlük ise
             # Mesajın içeriğini detaylı bir şekilde yazdır
             print("Message content:")
             print(f"  ID: {message.get('id')}")
@@ -136,11 +195,13 @@ class CVConsumer(AsyncWebsocketConsumer):
             print(f"  Language: {message.get('language')}")
             print(f"  Translation Key: {message.get('translation_key')}")
             print(f"  Updated At: {message.get('updated_at')}")
+            print(f"  Action: {message.get('action')}")
             
             # Mesajı JSON formatında gönder
             try:
                 json_message = json.dumps(message)
                 print(f"JSON message length: {len(json_message)} bytes")
+                print(f"JSON message preview: {json_message[:100]}...")
             except TypeError as e:
                 print(f"JSON serialization error in cv_update: {str(e)}")
                 # Datetime nesnelerini string'e çevir
@@ -154,11 +215,15 @@ class CVConsumer(AsyncWebsocketConsumer):
                 # Tekrar dene
                 json_message = json.dumps(message)
                 print(f"JSON message length after fixing: {len(json_message)} bytes")
+                print(f"JSON message preview after fixing: {json_message[:100]}...")
             
             # WebSocket bağlantı durumunu kontrol et
             if self.scope['type'] == 'websocket':
                 print(f"WebSocket connection state: {self.scope.get('state', 'unknown')}")
+                print(f"WebSocket client: {self.scope.get('client', 'unknown')}")
             
+            # Mesajı gönder
+            print(f"Sending message to client: {self.channel_name}")
             await self.send(text_data=json_message)
             print("CV update sent to client successfully")
             print("="*50)
