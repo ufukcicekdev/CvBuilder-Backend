@@ -7,5 +7,8 @@ router.register('cvs', CVViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('cvs/<int:id>/<str:translation_key>/<str:lang>/', get_cv_by_translation, name='cv-by-translation'),
+    # Old URL pattern (without template_id)
+    path('cvs/<int:id>/<str:translation_key>/<str:lang>/', get_cv_by_translation, name='cv-by-translation-old'),
+    # New URL pattern (with template_id)
+    path('cvs/<str:template_id>/<int:id>/<str:translation_key>/<str:lang>/', get_cv_by_translation, name='cv-by-translation'),
 ] 

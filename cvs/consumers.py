@@ -15,10 +15,13 @@ class CVConsumer(AsyncWebsocketConsumer):
             self.translation_key = self.scope['url_route']['kwargs']['translation_key']
             self.lang = self.scope['url_route']['kwargs']['lang']
             
-            # print(f"Connection parameters: cv_id={self.cv_id}, translation_key={self.translation_key}, lang={self.lang}")
+            # template_id parametresi varsa al, yoksa varsayılan değer kullan
+            self.template_id = self.scope['url_route']['kwargs'].get('template_id', '1')
+            
+            # print(f"Connection parameters: template_id={self.template_id}, cv_id={self.cv_id}, translation_key={self.translation_key}, lang={self.lang}")
             
             # Grup adını oluştur
-            self.group_name = f'cv_{self.cv_id}_{self.translation_key}_{self.lang}'
+            self.group_name = f'cv_{self.template_id}_{self.cv_id}_{self.translation_key}_{self.lang}'
             # print(f"Group name: {self.group_name}")
             
             # Gruba katıl
@@ -95,7 +98,7 @@ class CVConsumer(AsyncWebsocketConsumer):
     def get_cv_data(self):
         # print("="*50)
         # print("Getting CV data")
-        # print(f"Parameters: cv_id={self.cv_id}, translation_key={self.translation_key}, lang={self.lang}")
+        # print(f"Parameters: template_id={self.template_id}, cv_id={self.cv_id}, translation_key={self.translation_key}, lang={self.lang}")
         
         try:
             cv = CV.objects.get(id=self.cv_id, translation_key=self.translation_key)
@@ -110,6 +113,7 @@ class CVConsumer(AsyncWebsocketConsumer):
             
             data = {
                 'id': cv.id,
+                'template_id': self.template_id,
                 'title': cv.title,
                 'language': translation.language_code,
                 'personal_info': translation.personal_info,

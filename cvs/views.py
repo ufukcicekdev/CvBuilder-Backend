@@ -310,10 +310,10 @@ class CVBaseMixin:
 
         return current_translation
 
-    def _notify_cv_update(self, cv, lang):
+    def _notify_cv_update(self, cv, lang, template_id='1'):
         """CV güncellendiğinde WebSocket üzerinden bildirim gönder"""
         channel_layer = get_channel_layer()
-        group_name = f'cv_{cv.id}_{cv.translation_key}_{lang}'
+        group_name = f'cv_{template_id}_{cv.id}_{cv.translation_key}_{lang}'
         
         # Güncel CV verilerini al
         translation = cv.translations.filter(language_code=lang).first()
@@ -323,6 +323,7 @@ class CVBaseMixin:
         if translation:
             data = {
                 'id': cv.id,
+                'template_id': template_id,
                 'title': cv.title,
                 'language': translation.language_code,
                 'personal_info': translation.personal_info,
@@ -987,7 +988,7 @@ def debug_auth(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-def get_cv_by_translation(request, id, translation_key, lang):
+def get_cv_by_translation(request, id, translation_key, lang, template_id='1'):
     try:
         cv = CV.objects.get(id=id, translation_key=translation_key)
         translation = cv.translations.filter(language_code=lang).first()
@@ -1001,6 +1002,7 @@ def get_cv_by_translation(request, id, translation_key, lang):
         # Çeviriyi al
         data = {
             'id': cv.id,
+            'template_id': template_id,
             'title': cv.title,
             'language': translation.language_code,
             'personal_info': translation.personal_info,
