@@ -6,12 +6,18 @@ from profiles.views import ProfileViewSet, SkillViewSet, LanguageViewSet
 from cvs.views import CVViewSet, get_cv_by_translation
 from django.conf import settings
 from django.conf.urls.static import static
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
 
 router = DefaultRouter()
 router.register(r'profiles', ProfileViewSet, basename='profile')
 router.register(r'skills', SkillViewSet)
 router.register(r'languages', LanguageViewSet)
 router.register(r'cvs', CVViewSet, basename='cv')
+
+@api_view(['GET'])
+def health_check(request):
+    return Response({"status": "healthy"})
 
 urlpatterns = [
     path('admin/', admin.site.urls),    
@@ -23,6 +29,7 @@ urlpatterns = [
     path('api/auth/', include('social_auth.urls')),
     path('', include('social_django.urls', namespace='social')),
     path('api/contact/', include('contact.urls')),
+    path('health/', health_check, name='health_check'),
     # CV translation endpoint
     path('cvs/<int:id>/<str:translation_key>/<str:lang>/', get_cv_by_translation, name='cv-by-translation'),
 ] 

@@ -2,13 +2,13 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import CV, CVTranslation
+import asyncio
 
 class CVConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         try:
-            # print("="*50)
-            # print("WebSocket Connection Attempt")
-            # print("="*50)
+            print("="*50)
+            print("WebSocket Connection Attempt")
             
             # URL'den CV bilgilerini al
             self.cv_id = self.scope['url_route']['kwargs']['cv_id']
@@ -18,11 +18,11 @@ class CVConsumer(AsyncWebsocketConsumer):
             # template_id parametresi varsa al, yoksa varsayılan değer kullan
             self.template_id = self.scope['url_route']['kwargs'].get('template_id', '1')
             
-            # print(f"Connection parameters: template_id={self.template_id}, cv_id={self.cv_id}, translation_key={self.translation_key}, lang={self.lang}")
+            print(f"Connection parameters: template_id={self.template_id}, cv_id={self.cv_id}, translation_key={self.translation_key}, lang={self.lang}")
             
             # Grup adını oluştur
             self.group_name = f'cv_{self.template_id}_{self.cv_id}_{self.translation_key}_{self.lang}'
-            # print(f"Group name: {self.group_name}")
+            print(f"Group name: {self.group_name}")
             
             # Gruba katıl
             await self.channel_layer.group_add(
@@ -31,47 +31,61 @@ class CVConsumer(AsyncWebsocketConsumer):
             )
             
             await self.accept()
-            # print("WebSocket connection accepted")
-            # print("="*50)
+            print("WebSocket connection accepted")
+            print("="*50)
 
+            # Ping/pong mekanizmasını başlat
+            self.ping_task = asyncio.create_task(self.send_ping())
+            
             # Bağlantı başarılı olduğunda CV verilerini gönder
             cv_data = await self.get_cv_data()
             if cv_data:
                 await self.send(text_data=json.dumps(cv_data))
-                # print("Initial CV data sent to client")
+                print("Initial CV data sent to client")
             else:
-                # print("No CV data available to send")
+                print("No CV data available to send")
                 await self.close()
 
         except Exception as e:
-            # print(f"Error in WebSocket connect: {str(e)}")
+            print(f"Error in WebSocket connect: {str(e)}")
             await self.close()
             raise
 
     async def disconnect(self, close_code):
-        # print("="*50)
-        # print("WebSocket Disconnection")
-        # print(f"Close code: {close_code}")
-        # print(f"Group name: {self.group_name}")
+        print("="*50)
+        print("WebSocket Disconnection")
+        print(f"Close code: {close_code}")
+        print(f"Group name: {self.group_name}")
         
+        # Ping task'ı iptal et
+        if hasattr(self, 'ping_task'):
+            self.ping_task.cancel()
+            
         # Gruptan ayrıl
         await self.channel_layer.group_discard(
             self.group_name,
             self.channel_name
         )
-        # print("Disconnected from group")
-        # print("="*50)
+        print("Disconnected from group")
+        print("="*50)
 
     async def receive(self, text_data):
-        # print("="*50)
-        # print("Received WebSocket message")
-        # print(f"Raw data: {text_data}")
+        print("="*50)
+        print("Received WebSocket message")
+        print(f"Raw data: {text_data}")
         
+        # Ping mesajını kontrol et
+        if text_data == "ping":
+            await self.send(text_data="pong")
+            print("Ping received, pong sent")
+            print("="*50)
+            return
+            
         # Mesajı al ve gruba ilet
         text_data_json = json.loads(text_data)
         message = text_data_json['message']
         
-        # print(f"Parsed message: {message}")
+        print(f"Parsed message: {message}")
         
         await self.channel_layer.group_send(
             self.group_name,
@@ -80,19 +94,26 @@ class CVConsumer(AsyncWebsocketConsumer):
                 'message': message
             }
         )
-        # print("Message sent to group")
-        # print("="*50)
+        print("Message sent to group")
+        print("="*50)
 
     async def cv_update(self, event):
-        # print("="*50)
-        # print("Sending CV update to client")
-        # print(f"Event data: {event}")
-        
-        # Güncel CV verilerini gönder
-        message = event['message']
-        await self.send(text_data=json.dumps(message))
-        # print("CV update sent to client")
-        # print("="*50)
+        try:
+            print("="*50)
+            print("Sending CV update to client")
+            print(f"Event data: {event}")
+            print(f"Channel name: {self.channel_name}")
+            print(f"Group name: {self.group_name}")
+            
+            # Güncel CV verilerini gönder
+            message = event['message']
+            await self.send(text_data=json.dumps(message))
+            print("CV update sent to client successfully")
+            print("="*50)
+        except Exception as e:
+            print(f"Error sending CV update to client: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     @database_sync_to_async
     def get_cv_data(self):
@@ -143,3 +164,18 @@ class CVConsumer(AsyncWebsocketConsumer):
             # print(f"Error in get_cv_data: {str(e)}")
             # print("="*50)
             return None 
+
+    async def send_ping(self):
+        """Her 30 saniyede bir ping gönder"""
+        try:
+            while True:
+                await asyncio.sleep(30)
+                await self.send(text_data="ping")
+                print(f"Ping sent to client: {self.channel_name}")
+        except asyncio.CancelledError:
+            # Task iptal edildiğinde sessizce çık
+            pass
+        except Exception as e:
+            print(f"Error in send_ping: {str(e)}")
+            import traceback
+            traceback.print_exc() 
