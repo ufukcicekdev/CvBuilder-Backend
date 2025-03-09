@@ -357,6 +357,15 @@ class CVBaseMixin:
 
                 print(f"WebSocket üzerinden bildirim gönderiliyor: {group_name}")
                 
+                # Gönderilecek mesajın içeriğini detaylı bir şekilde yazdır
+                print("Gönderilecek mesaj içeriği:")
+                print(f"  ID: {data['id']}")
+                print(f"  Template ID: {data['template_id']}")
+                print(f"  Title: {data['title']}")
+                print(f"  Language: {data['language']}")
+                print(f"  Translation Key: {data['translation_key']}")
+                print(f"  Updated At: {data['updated_at']}")
+                
                 # WebSocket üzerinden bildirim gönder
                 async_to_sync(channel_layer.group_send)(
                     group_name,

@@ -107,6 +107,17 @@ class CVConsumer(AsyncWebsocketConsumer):
             
             # Güncel CV verilerini gönder
             message = event['message']
+            
+            # Mesajın içeriğini detaylı bir şekilde yazdır
+            print("Message content:")
+            print(f"  ID: {message.get('id')}")
+            print(f"  Template ID: {message.get('template_id')}")
+            print(f"  Title: {message.get('title')}")
+            print(f"  Language: {message.get('language')}")
+            print(f"  Translation Key: {message.get('translation_key')}")
+            print(f"  Updated At: {message.get('updated_at')}")
+            
+            # Mesajı JSON formatında gönder
             await self.send(text_data=json.dumps(message))
             print("CV update sent to client successfully")
             print("="*50)
@@ -117,19 +128,19 @@ class CVConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def get_cv_data(self):
-        # print("="*50)
-        # print("Getting CV data")
-        # print(f"Parameters: template_id={self.template_id}, cv_id={self.cv_id}, translation_key={self.translation_key}, lang={self.lang}")
+        print("="*50)
+        print("Getting CV data")
+        print(f"Parameters: template_id={self.template_id}, cv_id={self.cv_id}, translation_key={self.translation_key}, lang={self.lang}")
         
         try:
             cv = CV.objects.get(id=self.cv_id, translation_key=self.translation_key)
             translation = cv.translations.filter(language_code=self.lang).first()
             
             if not translation:
-                # print(f"No translation found for language {self.lang}, trying English")
+                print(f"No translation found for language {self.lang}, trying English")
                 translation = cv.translations.filter(language_code='en').first()
                 if not translation:
-                    # print("No translation found at all")
+                    print("No translation found at all")
                     return None
             
             data = {
@@ -145,7 +156,8 @@ class CVConsumer(AsyncWebsocketConsumer):
                 'certificates': translation.certificates,
                 'video_info': translation.video_info,
                 'created_at': cv.created_at.isoformat() if cv.created_at else None,
-                'updated_at': cv.updated_at.isoformat() if cv.updated_at else None
+                'updated_at': cv.updated_at.isoformat() if cv.updated_at else None,
+                'translation_key': cv.translation_key
             }
 
             # Kullanıcının profil resmini ekle
@@ -157,13 +169,22 @@ class CVConsumer(AsyncWebsocketConsumer):
                 else:
                     data['personal_info']['photo'] = cv.user.profile_picture.url
             
-            # print("CV data retrieved successfully")
-            # print("="*50)
+            # Döndürülen verinin içeriğini detaylı bir şekilde yazdır
+            print("Returned data content:")
+            print(f"  ID: {data['id']}")
+            print(f"  Template ID: {data['template_id']}")
+            print(f"  Title: {data['title']}")
+            print(f"  Language: {data['language']}")
+            print(f"  Translation Key: {data['translation_key']}")
+            print(f"  Updated At: {data['updated_at']}")
+            
+            print("CV data retrieved successfully")
+            print("="*50)
             return data
         except Exception as e:
-            # print(f"Error in get_cv_data: {str(e)}")
-            # print("="*50)
-            return None 
+            print(f"Error in get_cv_data: {str(e)}")
+            print("="*50)
+            return None
 
     async def send_ping(self):
         """Her 30 saniyede bir ping gönder"""
