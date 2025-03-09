@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #1976d2;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        {% if language == 'tr' %}
+            <h2>Email Adresinizi Doğrulayın</h2>
+            <p>Merhaba {{ username }},</p>
+            <p>CV Builder'a hoş geldiniz! Email adresinizi doğrulamak için aşağıdaki butona tıklayın:</p>
+            <a href="{{ verification_url }}" class="button">Email Adresimi Doğrula</a>
+            <p>Veya bu linki tarayıcınıza kopyalayın:</p>
+            <p>{{ verification_url }}</p>
+            <div class="footer">
+                <p>Bu email CV Builder tarafından gönderilmiştir.</p>
+                <p>Eğer bu işlemi siz yapmadıysanız, bu emaili görmezden gelebilirsiniz.</p>
+            </div>
+
+        {% elif language == 'fr' %}
+            <h2>Vérifiez votre adresse email</h2>
+            <p>Bonjour {{ username }},</p>
+            <p>Bienvenue sur CV Builder ! Cliquez sur le bouton ci-dessous pour vérifier votre adresse email :</p>
+            <a href="{{ verification_url }}" class="button">Vérifier mon email</a>
+            <p>Ou copiez ce lien dans votre navigateur :</p>
+            <p>{{ verification_url }}</p>
+            <div class="footer">
+                <p>Cet email a été envoyé par CV Builder.</p>
+                <p>Si vous n'avez pas initié cette action, vous pouvez ignorer cet email.</p>
+            </div>
+
+        {% elif language == 'de' %}
+            <h2>Bestätigen Sie Ihre E-Mail-Adresse</h2>
+            <p>Hallo {{ username }},</p>
+            <p>Willkommen bei CV Builder! Klicken Sie auf den Button unten, um Ihre E-Mail-Adresse zu bestätigen:</p>
+            <a href="{{ verification_url }}" class="button">E-Mail bestätigen</a>
+            <p>Oder kopieren Sie diesen Link in Ihren Browser:</p>
+            <p>{{ verification_url }}</p>
+            <div class="footer">
+                <p>Diese E-Mail wurde von CV Builder gesendet.</p>
+                <p>Wenn Sie diese Aktion nicht initiiert haben, können Sie diese E-Mail ignorieren.</p>
+            </div>
+
+        {% elif language == 'es' %}
+            <h2>Verifique su dirección de correo electrónico</h2>
+            <p>Hola {{ username }},</p>
+            <p>¡Bienvenido a CV Builder! Haga clic en el botón de abajo para verificar su dirección de correo electrónico:</p>
+            <a href="{{ verification_url }}" class="button">Verificar mi correo</a>
+            <p>O copie este enlace en su navegador:</p>
+            <p>{{ verification_url }}</p>
+            <div class="footer">
+                <p>Este correo fue enviado por CV Builder.</p>
+                <p>Si no inició esta acción, puede ignorar este correo.</p>
+            </div>
+
+        {% elif language == 'it' %}
+            <h2>Verifica il tuo indirizzo email</h2>
+            <p>Ciao {{ username }},</p>
+            <p>Benvenuto su CV Builder! Clicca sul pulsante qui sotto per verificare il tuo indirizzo email:</p>
+            <a href="{{ verification_url }}" class="button">Verifica email</a>
+            <p>O copia questo link nel tuo browser:</p>
+            <p>{{ verification_url }}</p>
+            <div class="footer">
+                <p>Questa email è stata inviata da CV Builder.</p>
+                <p>Se non hai avviato questa azione, puoi ignorare questa email.</p>
+            </div>
+
+        {% elif language == 'ru' %}
+            <h2>Подтвердите ваш email адрес</h2>
+            <p>Здравствуйте, {{ username }},</p>
+            <p>Добро пожаловать в CV Builder! Нажмите на кнопку ниже, чтобы подтвердить ваш email адрес:</p>
+            <a href="{{ verification_url }}" class="button">Подтвердить email</a>
+            <p>Или скопируйте эту ссылку в браузер:</p>
+            <p>{{ verification_url }}</p>
+            <div class="footer">
+                <p>Это письмо отправлено CV Builder.</p>
+                <p>Если вы не инициировали это действие, вы можете проигнорировать это письмо.</p>
+            </div>
+
+        {% elif language == 'ar' %}
+            <div dir="rtl">
+                <h2>تأكيد عنوان البريد الإلكتروني</h2>
+                <p>مرحباً {{ username }}،</p>
+                <p>مرحباً بك في CV Builder! انقر على الزر أدناه للتحقق من عنوان بريدك الإلكتروني:</p>
+                <a href="{{ verification_url }}" class="button">تأكيد البريد الإلكتروني</a>
+                <p>أو انسخ هذا الرابط في متصفحك:</p>
+                <p>{{ verification_url }}</p>
+                <div class="footer">
+                    <p>تم إرسال هذا البريد الإلكتروني بواسطة CV Builder.</p>
+                    <p>إذا لم تكن قد بدأت هذا الإجراء، يمكنك تجاهل هذا البريد الإلكتروني.</p>
+                </div>
+            </div>
+
+        {% elif language == 'zh' %}
+            <h2>验证您的电子邮件地址</h2>
+            <p>您好 {{ username }}，</p>
+            <p>欢迎使用 CV Builder！请点击下面的按钮验证您的电子邮件地址：</p>
+            <a href="{{ verification_url }}" class="button">验证邮箱</a>
+            <p>或将此链接复制到浏览器：</p>
+            <p>{{ verification_url }}</p>
+            <div class="footer">
+                <p>此邮件由 CV Builder 发送。</p>
+                <p>如果您没有发起此操作，可以忽略此邮件。</p>
+            </div>
+
+        {% elif language == 'hi' %}
+            <h2>अपना ईमेल पता सत्यापित करें</h2>
+            <p>नमस्ते {{ username }},</p>
+            <p>CV Builder में आपका स्वागत है! अपना ईमेल पता सत्यापित करने के लिए नीचे दिए गए बटन पर क्लिक करें:</p>
+            <a href="{{ verification_url }}" class="button">ईमेल सत्यापित करें</a>
+            <p>या इस लिंक को अपने ब्राउज़र में कॉपी करें:</p>
+            <p>{{ verification_url }}</p>
+            <div class="footer">
+                <p>यह ईमेल CV Builder द्वारा भेजा गया है।</p>
+                <p>यदि आपने यह कार्रवाई शुरू नहीं की है, तो आप इस ईमेल को अनदेखा कर सकते हैं।</p>
+            </div>
+
+        {% else %}
+            <h2>Verify Your Email Address</h2>
+            <p>Hello {{ username }},</p>
+            <p>Welcome to CV Builder! Click the button below to verify your email address:</p>
+            <a href="{{ verification_url }}" class="button">Verify My Email</a>
+            <p>Or copy this link to your browser:</p>
+            <p>{{ verification_url }}</p>
+            <div class="footer">
+                <p>This email was sent by CV Builder.</p>
+                <p>If you didn't initiate this action, you can ignore this email.</p>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html> 

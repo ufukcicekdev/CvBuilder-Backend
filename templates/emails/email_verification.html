@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Doğrulama</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .logo {
+            max-width: 150px;
+            margin-bottom: 10px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #777;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Email Adresinizi Doğrulayın</h2>
+        </div>
+        
+        <p>Merhaba {{ user.first_name|default:"Değerli Kullanıcı" }},</p>
+        
+        <p>CV Builder platformuna kaydolduğunuz için teşekkür ederiz. Hesabınızı aktifleştirmek için lütfen aşağıdaki butona tıklayarak email adresinizi doğrulayın:</p>
+        
+        <div style="text-align: center;">
+            <a href="{{ verification_url }}" class="button">Email Adresimi Doğrula</a>
+        </div>
+        
+        <p>Veya aşağıdaki linki tarayıcınıza kopyalayabilirsiniz:</p>
+        <p style="word-break: break-all;">{{ verification_url }}</p>
+        
+        <p>Bu email'i siz talep etmediyseniz, lütfen dikkate almayın.</p>
+        
+        <p>Saygılarımızla,<br>CV Builder Ekibi</p>
+        
+        <div class="footer">
+            <p>Bu otomatik bir emaildir, lütfen yanıtlamayınız.</p>
+        </div>
+    </div>
+</body>
+</html> 

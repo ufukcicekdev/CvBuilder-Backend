@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern CV Template</title>
+    <style>
+        :root {
+            --primary-color: #2196f3;
+            --text-color: #333;
+            --bg-color: #fff;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            text-align: center;
+            padding: 3rem 0;
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .profile-img {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            margin-bottom: 1rem;
+        }
+
+        .section {
+            margin: 2rem 0;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .skill-bar {
+            height: 10px;
+            background: #eee;
+            border-radius: 5px;
+            margin: 0.5rem 0;
+        }
+
+        .skill-level {
+            height: 100%;
+            background: var(--primary-color);
+            border-radius: 5px;
+        }
+
+        .experience-item, .education-item {
+            margin-bottom: 1.5rem;
+        }
+
+        .certificate-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .certificate-item {
+            padding: 1rem;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+
+        .contact-info {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{{personal_info.full_name}}</h1>
+        <div class="contact-info">
+            <span>{{personal_info.email}}</span>
+            <span>{{personal_info.phone}}</span>
+            <span>{{personal_info.address}}</span>
+        </div>
+    </div>
+
+    <div class="container">
+        {% if personal_info.summary %}
+        <div class="section">
+            <h2 class="section-title">Hakkımda</h2>
+            <p>{{personal_info.summary}}</p>
+        </div>
+        {% endif %}
+
+        <div class="section">
+            <h2 class="section-title">Deneyim</h2>
+            {% for exp in experience %}
+            <div class="experience-item">
+                <h3>{{exp.position}} - {{exp.company}}</h3>
+                <p>{{exp.start_date}} - {% if exp.is_current %}Devam Ediyor{% else %}{{exp.end_date}}{% endif %}</p>
+                <p>{{exp.description}}</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Eğitim</h2>
+            {% for edu in education %}
+            <div class="education-item">
+                <h3>{{edu.school}}</h3>
+                <p>{{edu.degree}} - {{edu.field}}</p>
+                <p>{{edu.start_date}} - {% if edu.is_current %}Devam Ediyor{% else %}{{edu.end_date}}{% endif %}</p>
+                <p>{{edu.description}}</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Yetenekler</h2>
+            {% for skill in skills %}
+            <div>
+                <h4>{{skill.name}} ({{skill.level}}/5)</h4>
+                <div class="skill-bar">
+                    <div class="skill-level" style="width: {% widthratio skill.level 5 100 %}%"></div>
+                </div>
+                <p>{{skill.description}}</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Yabancı Diller</h2>
+            {% for lang in languages %}
+            <div>
+                <h4>{{lang.name}} ({{lang.level}}/5)</h4>
+                <div class="skill-bar">
+                    <div class="skill-level" style="width: {% widthratio lang.level 5 100 %}%"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if certificates %}
+        <div class="section">
+            <h2 class="section-title">Sertifikalar</h2>
+            <div class="certificate-grid">
+                {% for cert in certificates %}
+                <div class="certificate-item">
+                    <h4>{{cert.name}}</h4>
+                    <p>{{cert.issuer}}</p>
+                    <p>{{cert.date}}</p>
+                    {% if cert.document_url %}
+                    <a href="{{cert.document_url}}" target="_blank">Sertifikayı Görüntüle</a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if video_url %}
+        <div class="section">
+            <h2 class="section-title">Video Özgeçmiş</h2>
+            <video controls style="width: 100%; max-width: 600px; margin: 0 auto; display: block;">
+                <source src="{{video_url}}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            {% if video_description %}
+            <p>{{video_description}}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html> 

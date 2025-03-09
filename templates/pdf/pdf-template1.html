@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #2196f3;
+            padding-bottom: 20px;
+        }
+
+        .section {
+            margin: 20px 0;
+        }
+
+        .section-title {
+            color: #2196f3;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+            margin-bottom: 15px;
+        }
+
+        .experience-item, .education-item {
+            margin-bottom: 15px;
+        }
+
+        .skill-level {
+            width: 100px;
+            height: 10px;
+            background: #eee;
+            display: inline-block;
+            margin-left: 10px;
+        }
+
+        .skill-fill {
+            height: 100%;
+            background: #2196f3;
+        }
+
+        .certificate-item {
+            margin-bottom: 10px;
+        }
+
+        .contact-info {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        .page-break {
+            page-break-after: always;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{{personal_info.full_name}}</h1>
+        <div class="contact-info">
+            <div>{{personal_info.email}} | {{personal_info.phone}}</div>
+            <div>{{personal_info.address}}</div>
+        </div>
+    </div>
+
+    {% if personal_info.summary %}
+    <div class="section">
+        <h2 class="section-title">Özet</h2>
+        <p>{{personal_info.summary}}</p>
+    </div>
+    {% endif %}
+
+    <div class="section">
+        <h2 class="section-title">İş Deneyimi</h2>
+        {% for exp in experience %}
+        <div class="experience-item">
+            <h3>{{exp.position}}</h3>
+            <div>{{exp.company}}</div>
+            <div>{{exp.start_date}} - {{exp.is_current ? 'Devam Ediyor' : exp.end_date}}</div>
+            <p>{{exp.description}}</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">Eğitim</h2>
+        {% for edu in education %}
+        <div class="education-item">
+            <h3>{{edu.school}}</h3>
+            <div>{{edu.degree}} - {{edu.field}}</div>
+            <div>{{edu.start_date}} - {{edu.is_current ? 'Devam Ediyor' : edu.end_date}}</div>
+            <p>{{edu.description}}</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">Yetenekler</h2>
+        {% for skill in skills %}
+        <div>
+            <span>{{skill.name}} ({{skill.level}}/5)</span>
+            <div class="skill-level">
+                <div class="skill-fill" style="width: {{skill.level * 20}}%"></div>
+            </div>
+            {% if skill.description %}
+            <p>{{skill.description}}</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">Yabancı Diller</h2>
+        {% for lang in languages %}
+        <div>
+            <span>{{lang.name}} ({{lang.level}}/5)</span>
+            <div class="skill-level">
+                <div class="skill-fill" style="width: {{lang.level * 20}}%"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if certificates.length > 0 %}
+    <div class="section">
+        <h2 class="section-title">Sertifikalar</h2>
+        {% for cert in certificates %}
+        <div class="certificate-item">
+            <h4>{{cert.name}}</h4>
+            <div>{{cert.issuer}} - {{cert.date}}</div>
+            {% if cert.description %}
+            <p>{{cert.description}}</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</body>
+</html> 
