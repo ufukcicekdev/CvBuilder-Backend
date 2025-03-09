@@ -3,12 +3,15 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import CV, CVTranslation
 import asyncio
+from .views import get_cv_group_name
 
 class CVConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         try:
             print("="*50)
             print("WebSocket Connection Attempt")
+            print(f"Scope type: {self.scope['type']}")
+            print(f"Scope path: {self.scope.get('path', 'unknown')}")
             
             # URL'den CV bilgilerini al
             self.cv_id = self.scope['url_route']['kwargs']['cv_id']
@@ -21,8 +24,11 @@ class CVConsumer(AsyncWebsocketConsumer):
             print(f"Connection parameters: template_id={self.template_id}, cv_id={self.cv_id}, translation_key={self.translation_key}, lang={self.lang}")
             
             # Grup adını oluştur
-            self.group_name = f'cv_{self.template_id}_{self.cv_id}_{self.translation_key}_{self.lang}'
+            self.group_name = get_cv_group_name(self.cv_id, self.translation_key, self.lang, self.template_id)
             print(f"Group name: {self.group_name}")
+            
+            # Channel layer bilgilerini kontrol et
+            print(f"Channel layer type: {type(self.channel_layer).__name__}")
             
             # Gruba katıl
             await self.channel_layer.group_add(
@@ -32,6 +38,7 @@ class CVConsumer(AsyncWebsocketConsumer):
             
             await self.accept()
             print("WebSocket connection accepted")
+            print(f"Channel name: {self.channel_name}")
             print("="*50)
 
             # Ping/pong mekanizmasını başlat
@@ -70,32 +77,44 @@ class CVConsumer(AsyncWebsocketConsumer):
         print("="*50)
 
     async def receive(self, text_data):
+        # Ping mesajını kontrol et ve sessizce işle
+        if text_data == "ping":
+            await self.send(text_data="pong")
+            return
+            
+        # Normal mesajlar için log yazdır
         print("="*50)
         print("Received WebSocket message")
         print(f"Raw data: {text_data}")
-        
-        # Ping mesajını kontrol et
-        if text_data == "ping":
-            await self.send(text_data="pong")
-            print("Ping received, pong sent")
-            print("="*50)
-            return
+        print(f"Channel name: {self.channel_name}")
+        print(f"Group name: {self.group_name}")
             
-        # Mesajı al ve gruba ilet
-        text_data_json = json.loads(text_data)
-        message = text_data_json['message']
-        
-        print(f"Parsed message: {message}")
-        
-        await self.channel_layer.group_send(
-            self.group_name,
-            {
-                'type': 'cv_update',
-                'message': message
-            }
-        )
-        print("Message sent to group")
-        print("="*50)
+        try:
+            # Mesajı al ve gruba ilet
+            text_data_json = json.loads(text_data)
+            message = text_data_json.get('message')
+            
+            if not message:
+                print("Error: 'message' field not found in the received data")
+                return
+            
+            print(f"Parsed message: {message}")
+            
+            await self.channel_layer.group_send(
+                self.group_name,
+                {
+                    'type': 'cv_update',
+                    'message': message
+                }
+            )
+            print("Message sent to group")
+            print("="*50)
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON: {str(e)}")
+        except Exception as e:
+            print(f"Error processing message: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     async def cv_update(self, event):
         try:
@@ -118,7 +137,14 @@ class CVConsumer(AsyncWebsocketConsumer):
             print(f"  Updated At: {message.get('updated_at')}")
             
             # Mesajı JSON formatında gönder
-            await self.send(text_data=json.dumps(message))
+            json_message = json.dumps(message)
+            print(f"JSON message length: {len(json_message)} bytes")
+            
+            # WebSocket bağlantı durumunu kontrol et
+            if self.scope['type'] == 'websocket':
+                print(f"WebSocket connection state: {self.scope.get('state', 'unknown')}")
+            
+            await self.send(text_data=json_message)
             print("CV update sent to client successfully")
             print("="*50)
         except Exception as e:

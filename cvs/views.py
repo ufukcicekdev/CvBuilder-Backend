@@ -24,6 +24,10 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import boto3
 
+def get_cv_group_name(cv_id, translation_key, lang, template_id='1'):
+    """CV WebSocket grup adını oluşturan yardımcı fonksiyon"""
+    return f'cv_{template_id}_{cv_id}_{translation_key}_{lang}'
+
 class CVBaseMixin:
     # Desteklenen diller ve OpenAI için karşılıkları
     SUPPORTED_LANGUAGES = {
@@ -316,10 +320,20 @@ class CVBaseMixin:
             print("="*50)
             print(f"_notify_cv_update çağrıldı: cv_id={cv.id}, lang={lang}, template_id={template_id}")
             
+            # Grup adı oluşturma detayları
+            print(f"Grup adı oluşturma detayları:")
+            print(f"  cv.id: {cv.id}")
+            print(f"  cv.translation_key: {cv.translation_key}")
+            print(f"  lang: {lang}")
+            print(f"  template_id: {template_id}")
+            
             channel_layer = get_channel_layer()
-            group_name = f'cv_{template_id}_{cv.id}_{cv.translation_key}_{lang}'
+            group_name = get_cv_group_name(cv.id, cv.translation_key, lang, template_id)
             
             print(f"WebSocket group_name: {group_name}")
+            
+            # Channel layer bilgilerini kontrol et
+            print(f"Channel layer type: {type(channel_layer).__name__}")
             
             # Güncel CV verilerini al
             translation = cv.translations.filter(language_code=lang).first()
@@ -342,7 +356,9 @@ class CVBaseMixin:
                     'video_info': translation.video_info,
                     'created_at': cv.created_at,
                     'updated_at': cv.updated_at,
-                    'translation_key': cv.translation_key
+                    'translation_key': cv.translation_key,
+                    'action': 'update',  # Mesaj tipini belirt
+                    'timestamp': timezone.now().timestamp()  # Zaman damgası ekle
                 }
 
                 # Kullanıcının profil resmini ekle
@@ -365,6 +381,24 @@ class CVBaseMixin:
                 print(f"  Language: {data['language']}")
                 print(f"  Translation Key: {data['translation_key']}")
                 print(f"  Updated At: {data['updated_at']}")
+                print(f"  Action: {data['action']}")
+                print(f"  Timestamp: {data['timestamp']}")
+                
+                # Mesajı JSON formatına dönüştür ve kontrol et
+                try:
+                    json_data = json.dumps(data)
+                    print(f"JSON message length: {len(json_data)} bytes")
+                except Exception as json_error:
+                    print(f"JSON serialization error: {str(json_error)}")
+                    # Hata durumunda basitleştirilmiş veri gönder
+                    data = {
+                        'id': cv.id,
+                        'template_id': template_id,
+                        'title': cv.title,
+                        'language': translation.language_code,
+                        'action': 'update',
+                        'timestamp': str(timezone.now())
+                    }
                 
                 # WebSocket üzerinden bildirim gönder
                 async_to_sync(channel_layer.group_send)(
