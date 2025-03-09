@@ -8,7 +8,6 @@ from rest_framework.authentication import TokenAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.viewsets import ModelViewSet
 from django.template.loader import render_to_string
-from weasyprint import HTML
 from django.http import HttpResponse
 import tempfile
 import os
