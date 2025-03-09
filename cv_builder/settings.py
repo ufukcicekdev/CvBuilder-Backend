@@ -313,6 +313,11 @@ CHANNEL_AUTHENTICATION = {
     'DEFAULT': 'channels.auth.SessionAuthentication',
 }
 
+CHANNEL_SETTINGS = {
+    'PING_INTERVAL': 30,  # saniye
+    'PING_TIMEOUT': 20,   # saniye
+}
+
 # WebSocket için güvenlik ayarları
 CHANNEL_SECURITY = {
     'ALLOWED_HOSTS': [
