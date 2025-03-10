@@ -38,8 +38,8 @@ class RegisterView(generics.CreateAPIView):
         if serializer.is_valid():
             user = serializer.save()
             
-            # Email doğrulama maili gönder
-            send_verification_email(user)
+            # Email doğrulama maili serializer içinde gönderiliyor
+            # send_verification_email(user)
             
             auth = TokenAuthentication()
             result = auth.authenticate_credentials(
@@ -270,6 +270,29 @@ def verify_email(request, token):
     """
     Email doğrulama token'ını kontrol eder ve kullanıcının hesabını doğrular
     """
+    # Dil tercihini belirle:
+    # 1. Önce request.query_params içindeki 'language' parametresini kontrol et
+    # 2. Yoksa, 'Accept-Language' HTTP başlığını kontrol et
+    # 3. Hiçbiri yoksa varsayılan olarak 'en' kullan
+    language = request.query_params.get('language')
+    
+    if not language:
+        # HTTP başlığından dil bilgisini al
+        accept_language = request.META.get('HTTP_ACCEPT_LANGUAGE', '')
+        if accept_language:
+            # İlk dil kodunu al (örn: 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' -> 'tr')
+            language = accept_language.split(',')[0].split('-')[0].lower()
+        else:
+            # Varsayılan dil
+            language = 'en'
+    
+    # Desteklenen diller listesi
+    supported_languages = ['tr', 'en', 'fr', 'de', 'es', 'it', 'ru', 'ar', 'zh', 'hi']
+    
+    # Eğer dil desteklenmiyorsa, varsayılan olarak İngilizce kullan
+    if language not in supported_languages:
+        language = 'en'
+    
     try:
         # Token ile kullanıcıyı bul
         user = User.objects.get(email_verification_token=token)
@@ -278,8 +301,22 @@ def verify_email(request, token):
         if user.email_verification_token_created_at:
             token_age = timezone.now() - user.email_verification_token_created_at
             if token_age.days > 1:  # 24 saatten fazla ise
+                # Dile göre hata mesajı
+                error_messages = {
+                    'tr': 'Doğrulama bağlantısının süresi dolmuş. Lütfen yeni bir doğrulama maili talep edin.',
+                    'en': 'Verification link has expired. Please request a new verification email.',
+                    'fr': 'Le lien de vérification a expiré. Veuillez demander un nouvel e-mail de vérification.',
+                    'de': 'Der Bestätigungslink ist abgelaufen. Bitte fordern Sie eine neue Bestätigungs-E-Mail an.',
+                    'es': 'El enlace de verificación ha caducado. Solicite un nuevo correo electrónico de verificación.',
+                    'it': 'Il link di verifica è scaduto. Richiedi una nuova email di verifica.',
+                    'ru': 'Срок действия ссылки для подтверждения истек. Пожалуйста, запросите новое письмо с подтверждением.',
+                    'ar': 'انتهت صلاحية رابط التحقق. يرجى طلب بريد إلكتروني جديد للتحقق.',
+                    'zh': '验证链接已过期。请请求新的验证电子邮件。',
+                    'hi': 'सत्यापन लिंक की समय सीमा समाप्त हो गई है। कृपया एक नया सत्यापन ईमेल अनुरोध करें।'
+                }
+                
                 return Response({
-                    'error': 'Doğrulama bağlantısının süresi dolmuş. Lütfen yeni bir doğrulama maili talep edin.'
+                    'error': error_messages.get(language, error_messages['en'])
                 }, status=status.HTTP_400_BAD_REQUEST)
         
         # Kullanıcıyı doğrulanmış olarak işaretle
@@ -288,13 +325,41 @@ def verify_email(request, token):
         user.email_verification_token_created_at = None
         user.save()
         
+        # Dile göre başarı mesajı
+        success_messages = {
+            'tr': 'Email adresiniz başarıyla doğrulandı. Şimdi giriş yapabilirsiniz.',
+            'en': 'Your email has been successfully verified. You can now log in.',
+            'fr': 'Votre e-mail a été vérifié avec succès. Vous pouvez maintenant vous connecter.',
+            'de': 'Ihre E-Mail wurde erfolgreich verifiziert. Sie können sich jetzt anmelden.',
+            'es': 'Su correo electrónico ha sido verificado con éxito. Ahora puede iniciar sesión.',
+            'it': 'La tua email è stata verificata con successo. Ora puoi accedere.',
+            'ru': 'Ваш адрес электронной почты успешно подтвержден. Теперь вы можете войти в систему.',
+            'ar': 'تم التحقق من بريدك الإلكتروني بنجاح. يمكنك الآن تسجيل الدخول.',
+            'zh': '您的电子邮件已成功验证。您现在可以登录。',
+            'hi': 'आपका ईमेल सफलतापूर्वक सत्यापित किया गया है। अब आप लॉग इन कर सकते हैं।'
+        }
+        
         return Response({
-            'message': 'Email adresiniz başarıyla doğrulandı. Şimdi giriş yapabilirsiniz.'
+            'message': success_messages.get(language, success_messages['en'])
         }, status=status.HTTP_200_OK)
         
     except User.DoesNotExist:
+        # Dile göre hata mesajı
+        error_messages = {
+            'tr': 'Geçersiz doğrulama bağlantısı.',
+            'en': 'Invalid verification link.',
+            'fr': 'Lien de vérification invalide.',
+            'de': 'Ungültiger Bestätigungslink.',
+            'es': 'Enlace de verificación no válido.',
+            'it': 'Link di verifica non valido.',
+            'ru': 'Недействительная ссылка для подтверждения.',
+            'ar': 'رابط التحقق غير صالح.',
+            'zh': '无效的验证链接。',
+            'hi': 'अमान्य सत्यापन लिंक।'
+        }
+        
         return Response({
-            'error': 'Geçersiz doğrulama bağlantısı.'
+            'error': error_messages.get(language, error_messages['en'])
         }, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
@@ -304,6 +369,30 @@ def resend_verification_email(request):
     Kullanıcıya yeni bir doğrulama maili gönderir
     """
     email = request.data.get('email')
+    
+    # Dil tercihini belirle:
+    # 1. Önce request.data içindeki 'language' parametresini kontrol et
+    # 2. Yoksa, 'Accept-Language' HTTP başlığını kontrol et
+    # 3. Hiçbiri yoksa varsayılan olarak 'en' kullan
+    language = request.data.get('language')
+    
+    if not language:
+        # HTTP başlığından dil bilgisini al
+        accept_language = request.META.get('HTTP_ACCEPT_LANGUAGE', '')
+        if accept_language:
+            # İlk dil kodunu al (örn: 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' -> 'tr')
+            language = accept_language.split(',')[0].split('-')[0].lower()
+        else:
+            # Varsayılan dil
+            language = 'en'
+    
+    # Desteklenen diller listesi
+    supported_languages = ['tr', 'en', 'fr', 'de', 'es', 'it', 'ru', 'ar', 'zh', 'hi']
+    
+    # Eğer dil desteklenmiyorsa, varsayılan olarak İngilizce kullan
+    if language not in supported_languages:
+        language = 'en'
+    
     if not email:
         return Response({
             'error': 'Email adresi gereklidir.'
@@ -319,7 +408,7 @@ def resend_verification_email(request):
             }, status=status.HTTP_200_OK)
         
         # Yeni doğrulama maili gönder
-        send_verification_email(user)
+        send_verification_email(user, language)
         
         return Response({
             'message': 'Doğrulama maili gönderildi. Lütfen email kutunuzu kontrol edin.'
@@ -337,40 +426,64 @@ def forgot_password(request):
     """
     Şifre sıfırlama e-postası gönderir
     """
-    print("DEBUG: forgot_password fonksiyonu çağrıldı")
+    # print("DEBUG: forgot_password fonksiyonu çağrıldı")
     email = request.data.get('email')
-    print(f"DEBUG: Gelen email: {email}")
+    
+    # Dil tercihini belirle:
+    # 1. Önce request.data içindeki 'language' parametresini kontrol et
+    # 2. Yoksa, 'Accept-Language' HTTP başlığını kontrol et
+    # 3. Hiçbiri yoksa varsayılan olarak 'en' kullan
+    language = request.data.get('language')
+    
+    if not language:
+        # HTTP başlığından dil bilgisini al
+        accept_language = request.META.get('HTTP_ACCEPT_LANGUAGE', '')
+        if accept_language:
+            # İlk dil kodunu al (örn: 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' -> 'tr')
+            language = accept_language.split(',')[0].split('-')[0].lower()
+        else:
+            # Varsayılan dil
+            language = 'en'
+    
+    # Desteklenen diller listesi
+    supported_languages = ['tr', 'en', 'fr', 'de', 'es', 'it', 'ru', 'ar', 'zh', 'hi']
+    
+    # Eğer dil desteklenmiyorsa, varsayılan olarak İngilizce kullan
+    if language not in supported_languages:
+        language = 'en'
+    
+    # print(f"DEBUG: Gelen email: {email}")
     
     if not email:
-        print("DEBUG: Email adresi bulunamadı")
+        # print("DEBUG: Email adresi bulunamadı")
         return Response({'error': 'Email adresi gereklidir'}, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        print(f"DEBUG: Kullanıcı aranıyor: {email}")
+        # print(f"DEBUG: Kullanıcı aranıyor: {email}")
         user = User.objects.get(email=email)
-        print(f"DEBUG: Kullanıcı bulundu: {user.username}")
+        # print(f"DEBUG: Kullanıcı bulundu: {user.username}")
     except User.DoesNotExist:
-        print(f"DEBUG: Kullanıcı bulunamadı: {email}")
+        # print(f"DEBUG: Kullanıcı bulunamadı: {email}")
         # Güvenlik nedeniyle kullanıcı bulunamasa bile başarılı yanıt döndür
         return Response({'message': 'Şifre sıfırlama bağlantısı gönderildi (eğer hesap varsa)'}, status=status.HTTP_200_OK)
     
     # Önceki sıfırlama tokenlarını iptal et
-    print(f"DEBUG: Önceki tokenlar siliniyor: {user.email}")
+    # print(f"DEBUG: Önceki tokenlar siliniyor: {user.email}")
     PasswordResetToken.objects.filter(user=user).delete()
     
     # Yeni token oluştur
-    print("DEBUG: Yeni token oluşturuluyor")
+    # print("DEBUG: Yeni token oluşturuluyor")
     reset_token = PasswordResetToken.objects.create(
         user=user,
         token=str(uuid.uuid4()),
         expires_at=timezone.now() + timezone.timedelta(hours=24)
     )
-    print(f"DEBUG: Token oluşturuldu: {reset_token.token}")
+    # print(f"DEBUG: Token oluşturuldu: {reset_token.token}")
     
     # E-posta gönder
-    print(f"DEBUG: E-posta gönderiliyor: {user.email}")
-    result = send_password_reset_email(user, reset_token.token)
-    print(f"DEBUG: E-posta gönderme sonucu: {result}")
+    # print(f"DEBUG: E-posta gönderiliyor: {user.email}")
+    result = send_password_reset_email(user, reset_token.token, language)
+    # print(f"DEBUG: E-posta gönderme sonucu: {result}")
     
     return Response({'message': 'Şifre sıfırlama bağlantısı e-posta adresinize gönderildi'}, status=status.HTTP_200_OK)
 

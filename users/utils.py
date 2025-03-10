@@ -108,7 +108,7 @@ def send_verification_email(user, language='en'):
     }
     
     # Email şablonunu render et
-    html_content = render_to_string('email/verification_email.html', context)
+    html_content = render_to_string('emails/email_verification.html', context)
     text_content = strip_tags(html_content)  # HTML'i düz metne çevir
     
     # Email'i gönder
@@ -122,33 +122,56 @@ def send_verification_email(user, language='en'):
         return True
     except Exception as e:
         # Hata durumunda False döndür ve logla
-        print(f"Doğrulama emaili gönderilemedi: {str(e)}")
+        # print(f"Doğrulama emaili gönderilemedi: {str(e)}")
         return False 
 
-def send_password_reset_email(user, token):
+def send_password_reset_email(user, token, language='en'):
     """
     Kullanıcıya şifre sıfırlama e-postası gönderir
+    
+    Args:
+        user: Şifre sıfırlama maili gönderilecek kullanıcı
+        token: Şifre sıfırlama token'ı
+        language: Email dilini belirten string (varsayılan: 'en')
+    
+    Returns:
+        bool: Email gönderildi mi?
     """
     try:
         # Frontend URL'sini oluştur
-        print("*****************")
-        print(settings.FRONTEND_URL)
-        print("*****************")
+        # print("*****************")
+        # print(settings.FRONTEND_URL)
+        # print("*****************")
         reset_url = f"{settings.FRONTEND_URL}/reset-password?token={token}"
+        
+        # Dile göre email başlıklarını ayarla
+        subject_by_lang = {
+            'tr': 'Şifre Sıfırlama Talebi - CV Builder',
+            'en': 'Password Reset Request - CV Builder',
+            'fr': 'Demande de réinitialisation de mot de passe - CV Builder',
+            'de': 'Anfrage zum Zurücksetzen des Passworts - CV Builder',
+            'es': 'Solicitud de restablecimiento de contraseña - CV Builder',
+            'it': 'Richiesta di reimpostazione della password - CV Builder',
+            'ru': 'Запрос на сброс пароля - CV Builder',
+            'ar': 'طلب إعادة تعيين كلمة المرور - CV Builder',
+            'zh': '密码重置请求 - CV Builder',
+            'hi': 'पासवर्ड रीसेट अनुरोध - CV Builder'
+        }
         
         # E-posta şablonunu hazırla
         context = {
             'user': user,
             'reset_url': reset_url,
-            'valid_hours': 24  # Token geçerlilik süresi (saat)
+            'valid_hours': 24,  # Token geçerlilik süresi (saat)
+            'language': language
         }
-        html_message = render_to_string('email/password_reset_email.html', context)
+        html_message = render_to_string('emails/password_reset_email.html', context)
         plain_message = strip_tags(html_message)
         
         # SMTP2GO kullanarak e-postayı gönder
         send_email_via_smtp2go(
             to_list=user.email,
-            subject='Şifre Sıfırlama Talebi',
+            subject=subject_by_lang.get(language, subject_by_lang['en']),  # Dil yoksa İngilizce kullan
             html_body=html_message,
             text_body=plain_message
         )

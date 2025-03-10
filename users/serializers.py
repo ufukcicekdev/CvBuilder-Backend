@@ -50,6 +50,14 @@ class UserSerializer(serializers.ModelSerializer):
         # Kullanıcıyı oluştur
         user = User.objects.create_user(**validated_data)
         
+        # Dil tercihini kontrol et
+        # Desteklenen diller listesi
+        supported_languages = ['tr', 'en', 'fr', 'de', 'es', 'it', 'ru', 'ar', 'zh', 'hi']
+        
+        # Eğer dil desteklenmiyorsa, varsayılan olarak İngilizce kullan
+        if language not in supported_languages:
+            language = 'en'
+        
         # Email doğrulama mailini seçilen dilde gönder
         send_verification_email(user, language)
         
