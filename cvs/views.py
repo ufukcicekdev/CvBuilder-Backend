@@ -1123,6 +1123,10 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
         print("Video bulunamadı")
         return Response({'error': 'Video not found'}, status=status.HTTP_404_NOT_FOUND)
 
+
+
+
+
 @api_view(['GET'])
 def debug_auth(request):
     return Response({
