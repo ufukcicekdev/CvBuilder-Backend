@@ -37,6 +37,7 @@ httpx==0.28.1
 hyperlink==21.0.0
 idna==3.10
 incremental==24.7.2
+iyzipay==1.0.45
 jiter==0.8.2
 jmespath==1.0.1
 msgpack==1.1.0
@@ -80,6 +81,7 @@ Twisted==24.11.0
 txaio==23.1.1
 typing_extensions==4.12.2
 urllib3==2.3.0
+weasyprint==64.1
 webencodings==0.5.1
 zope.interface==7.2
 zopfli==0.2.3.post1
