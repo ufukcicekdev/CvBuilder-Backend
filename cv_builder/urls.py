@@ -35,6 +35,7 @@ urlpatterns = [
     path('websocket-test/', TemplateView.as_view(template_name='web/websocket_test.html'), name='websocket_test'),
     # CV translation endpoint
     path('cvs/<int:id>/<str:translation_key>/<str:lang>/', get_cv_by_translation, name='cv-by-translation'),
+    path('api/subscriptions/', include('subscriptions.urls')),
 ] 
 
 if settings.DEBUG:

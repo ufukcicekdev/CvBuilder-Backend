@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'social_auth',
     'contact',
     'storages',
+    'subscriptions',
 ]
 
 MIDDLEWARE = [
@@ -380,3 +381,15 @@ SMTP2GO_FROM_EMAIL = os.getenv('SMTP2GO_FROM_EMAIL')
 
 # Frontend URL for email verification links
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+
+# Iyzico Settings
+IYZICO_API_KEY = os.environ.get('IYZICO_API_KEY', 'your_api_key')
+IYZICO_SECRET_KEY = os.environ.get('IYZICO_SECRET_KEY', 'your_secret_key')
+IYZICO_BASE_URL = os.environ.get('IYZICO_BASE_URL', 'https://sandbox-api.iyzipay.com')
+
+# IYZIPAY Settings dict for easy access
+IYZIPAY_SETTINGS = {
+    'api_key': IYZICO_API_KEY,
+    'secret_key': IYZICO_SECRET_KEY,
+    'base_url': IYZICO_BASE_URL
+}
