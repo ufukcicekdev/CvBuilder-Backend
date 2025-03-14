@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+{% load cv_filters %}
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>CV</title>
+    <style>
+        body {
+            font-family: 'Open Sans', 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #fff;
+        }
+        
+        .header-accent {
+            height: 15px;
+            background-color: #FF4081;
+            width: 100%;
+        }
+        
+        .container {
+            padding: 30px 40px 40px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            position: relative;
+        }
+        
+        .header-left {
+            flex: 1;
+        }
+        
+        .header-right {
+            flex: 0 0 100px;
+            margin-left: 20px;
+        }
+        
+        .profile-photo {
+            width: 100px;
+            height: 100px;
+            border-radius: 10px;
+            background-color: #f5f5f5;
+            overflow: hidden;
+        }
+        
+        .profile-photo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin: 0 0 5px 0;
+            color: #333;
+        }
+        
+        .subtitle {
+            color: #777;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+        
+        .contact-info {
+            margin-top: 15px;
+            font-size: 15px;
+            color: #555;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+        }
+        
+        .section-title {
+            color: #FF4081;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .experience-item, .education-item, .certificate-item {
+            margin-bottom: 25px;
+            position: relative;
+            padding-left: 20px;
+        }
+        
+        .experience-item:before, .education-item:before, .certificate-item:before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 3px;
+            background-color: #eee;
+        }
+        
+        .item-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        
+        .item-subtitle {
+            color: #555;
+            margin-bottom: 5px;
+        }
+        
+        .item-date {
+            color: #777;
+            font-size: 14px;
+            margin-bottom: 8px;
+            font-style: italic;
+        }
+        
+        .item-description {
+            font-size: 14px;
+            line-height: 1.5;
+            color: #444;
+        }
+        
+        .two-column {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        
+        .column {
+            flex: 1;
+            min-width: 250px;
+        }
+        
+        .skill-item, .language-item {
+            margin-bottom: 15px;
+        }
+        
+        .skill-name, .language-name {
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        
+        .skill-bar, .language-bar {
+            height: 6px;
+            background: #eee;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .skill-level, .language-level {
+            height: 100%;
+            background: #FF4081;
+            border-radius: 3px;
+        }
+        
+        .page-break {
+            page-break-after: always;
+        }
+        
+        /* Add right-to-left support for Arabic */
+        {% if lang == 'ar' %}
+        body {
+            direction: rtl;
+            text-align: right;
+        }
+        
+        .header {
+            flex-direction: row-reverse;
+        }
+        
+        .header-right {
+            margin-left: 0;
+            margin-right: 20px;
+        }
+        
+        .experience-item, .education-item, .certificate-item {
+            padding-left: 0;
+            padding-right: 20px;
+        }
+        
+        .experience-item:before, .education-item:before, .certificate-item:before {
+            left: auto;
+            right: 0;
+        }
+        {% endif %}
+        
+        @media print {
+            .header-accent {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            
+            .section-title {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            
+            .skill-level, .language-level {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header-accent"></div>
+    
+    <div class="container">
+        <div class="header">
+            <div class="header-left">
+                <h1>{% if personal_info.first_name %}{{ personal_info.first_name }}{% endif %} {% if personal_info.last_name %}{{ personal_info.last_name }}{% endif %}</h1>
+                {% if personal_info.title %}<div class="subtitle">{{ personal_info.title }}</div>{% endif %}
+                <div class="contact-info">
+                    {% if personal_info.email %}{{ personal_info.email }}{% endif %}{% if personal_info.email and personal_info.phone %} | {% endif %}{% if personal_info.phone %}{{ personal_info.phone }}{% endif %}
+                    {% if personal_info.location %}<div>{{ personal_info.location }}</div>{% endif %}
+                </div>
+            </div>
+            
+            <div class="header-right">
+                {% if personal_info.photo %}
+                <div class="profile-photo">
+                    <img src="{{ personal_info.photo }}" alt="Profile Photo">
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if personal_info.summary %}
+        <div class="section">
+            <div class="section-title">{{ translations.summary }}</div>
+            <p>{{ personal_info.summary }}</p>
+        </div>
+        {% endif %}
+        
+        {% if experience and experience|length > 0 %}
+        <div class="section">
+            <div class="section-title">{{ translations.experience }}</div>
+            {% for exp in experience %}
+            <div class="experience-item">
+                {% if exp.position %}<div class="item-title">{{ exp.position }}</div>{% endif %}
+                <div class="item-subtitle">{% if exp.company %}{{ exp.company }}{% endif %}{% if exp.location %} • {{ exp.location }}{% endif %}</div>
+                <div class="item-date">{% if exp.start_date %}{{ exp.start_date }}{% endif %} - {% if exp.is_current %}{{ translations.present }}{% elif exp.end_date %}{{ exp.end_date }}{% endif %}</div>
+                {% if exp.description %}<div class="item-description">{{ exp.description }}</div>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        {% if education and education|length > 0 %}
+        <div class="section">
+            <div class="section-title">{{ translations.education }}</div>
+            {% for edu in education %}
+            <div class="education-item">
+                {% if edu.degree %}<div class="item-title">{{ edu.degree }}</div>{% endif %}
+                <div class="item-subtitle">{% if edu.school %}{{ edu.school }}{% endif %}{% if edu.location %} • {{ edu.location }}{% endif %}</div>
+                <div class="item-date">{% if edu.start_date %}{{ edu.start_date }}{% endif %} - {% if edu.is_current %}{{ translations.present }}{% elif edu.end_date %}{{ edu.end_date }}{% endif %}</div>
+                {% if edu.description %}<div class="item-description">{{ edu.description }}</div>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <div class="two-column">
+            {% if skills and skills|length > 0 %}
+            <div class="column">
+                <div class="section">
+                    <div class="section-title">{{ translations.skills }}</div>
+                    {% for skill in skills %}
+                    <div class="skill-item">
+                        <div class="skill-name">{% if skill.name %}{{ skill.name }}{% endif %}</div>
+                        <div class="skill-bar">
+                            <div class="skill-level" style="width: {{ skill.level|default:'3'|floatformat:'0'|add:'0'|multiply:20 }}%"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if languages and languages|length > 0 %}
+            <div class="column">
+                <div class="section">
+                    <div class="section-title">{{ translations.languages }}</div>
+                    {% for lang_item in languages %}
+                    <div class="language-item">
+                        <div class="language-name">{% if lang_item.name %}{{ lang_item.name }}{% endif %}</div>
+                        <div class="language-bar">
+                            <div class="language-level" style="width: {{ lang_item.level|default:'3'|floatformat:'0'|add:'0'|multiply:20 }}%"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        {% if certificates and certificates|length > 0 %}
+        <div class="section">
+            <div class="section-title">{{ translations.certificates }}</div>
+            {% for cert in certificates %}
+            <div class="certificate-item">
+                {% if cert.name %}<div class="item-title">{{ cert.name }}</div>{% endif %}
+                <div class="item-subtitle">{% if cert.issuer %}{{ cert.issuer }}{% endif %}{% if cert.date %} - {{ cert.date }}{% endif %}</div>
+                {% if cert.description %}<div class="item-description">{{ cert.description }}</div>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html> 

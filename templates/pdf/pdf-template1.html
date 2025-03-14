@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+{% load cv_filters %}
 <html>
 <head>
     <meta charset="UTF-8">
@@ -58,84 +59,123 @@
         .page-break {
             page-break-after: always;
         }
+        
+        .debug-info {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        
+        /* Add right-to-left support for Arabic */
+        {% if lang == 'ar' %}
+        body {
+            direction: rtl;
+            text-align: right;
+        }
+        {% endif %}
     </style>
 </head>
 <body>
+    <!-- Debug Info -->
+    <div class="debug-info">
+        <h3>Debug Information</h3>
+        <p>Language: {{ lang }}</p>
+        <p>Personal Info Available: {{ personal_info|default:"None" }}</p>
+        <p>Experience Count: {{ experience|length }}</p>
+        <p>Education Count: {{ education|length }}</p>
+        <p>Skills Count: {{ skills|length }}</p>
+        <p>Languages Count: {{ languages|length }}</p>
+        <p>Certificates Count: {{ certificates|length }}</p>
+        <p>Translations Available: {{ translations|default:"None" }}</p>
+    </div>
+
     <div class="header">
-        <h1>{{personal_info.full_name}}</h1>
+        <h1>{% if personal_info.first_name %}{{ personal_info.first_name }}{% endif %} {% if personal_info.last_name %}{{ personal_info.last_name }}{% endif %}</h1>
         <div class="contact-info">
-            <div>{{personal_info.email}} | {{personal_info.phone}}</div>
-            <div>{{personal_info.address}}</div>
+            {% if personal_info.email %}<div>{{ personal_info.email }}{% if personal_info.phone %} | {{ personal_info.phone }}{% endif %}</div>{% endif %}
+            {% if personal_info.location %}<div>{{ personal_info.location }}</div>{% endif %}
         </div>
     </div>
 
     {% if personal_info.summary %}
     <div class="section">
-        <h2 class="section-title">Özet</h2>
-        <p>{{personal_info.summary}}</p>
+        <h2 class="section-title">{{ translations.summary }}</h2>
+        <p>{{ personal_info.summary }}</p>
     </div>
     {% endif %}
 
+    {% if experience and experience|length > 0 %}
     <div class="section">
-        <h2 class="section-title">İş Deneyimi</h2>
+        <h2 class="section-title">{{ translations.experience }}</h2>
         {% for exp in experience %}
         <div class="experience-item">
-            <h3>{{exp.position}}</h3>
-            <div>{{exp.company}}</div>
-            <div>{{exp.start_date}} - {{exp.is_current ? 'Devam Ediyor' : exp.end_date}}</div>
-            <p>{{exp.description}}</p>
+            {% if exp.position %}<h3>{{ exp.position }}</h3>{% endif %}
+            <div>{% if exp.company %}{{ exp.company }}{% endif %}{% if exp.location %} • {{ exp.location }}{% endif %}</div>
+            <div>{% if exp.start_date %}{{ exp.start_date }}{% endif %} - {% if exp.is_current %}{{ translations.present }}{% elif exp.end_date %}{{ exp.end_date }}{% endif %}</div>
+            {% if exp.description %}<p>{{ exp.description }}</p>{% endif %}
         </div>
         {% endfor %}
     </div>
+    {% endif %}
 
+    {% if education and education|length > 0 %}
     <div class="section">
-        <h2 class="section-title">Eğitim</h2>
+        <h2 class="section-title">{{ translations.education }}</h2>
         {% for edu in education %}
         <div class="education-item">
-            <h3>{{edu.school}}</h3>
-            <div>{{edu.degree}} - {{edu.field}}</div>
-            <div>{{edu.start_date}} - {{edu.is_current ? 'Devam Ediyor' : edu.end_date}}</div>
-            <p>{{edu.description}}</p>
+            {% if edu.degree %}<h3>{{ edu.degree }}</h3>{% endif %}
+            <div>{% if edu.school %}{{ edu.school }}{% endif %}{% if edu.location %} • {{ edu.location }}{% endif %}</div>
+            <div>{% if edu.start_date %}{{ edu.start_date }}{% endif %} - {% if edu.is_current %}{{ translations.present }}{% elif edu.end_date %}{{ edu.end_date }}{% endif %}</div>
+            {% if edu.description %}<p>{{ edu.description }}</p>{% endif %}
         </div>
         {% endfor %}
     </div>
+    {% endif %}
 
+    {% if skills and skills|length > 0 %}
     <div class="section">
-        <h2 class="section-title">Yetenekler</h2>
+        <h2 class="section-title">{{ translations.skills }}</h2>
         {% for skill in skills %}
         <div>
-            <span>{{skill.name}} ({{skill.level}}/5)</span>
+            <span>{% if skill.name %}{{ skill.name }}{% endif %} {% if skill.level %}({{ skill.level }}/5 {{ translations.skill_level }}){% endif %}</span>
             <div class="skill-level">
-                <div class="skill-fill" style="width: {{skill.level * 20}}%"></div>
+                <div class="skill-fill" style="width: {{ skill.level|default:'3'|floatformat:'0'|add:'0'|multiply:20 }}%"></div>
             </div>
             {% if skill.description %}
-            <p>{{skill.description}}</p>
+            <p>{{ skill.description }}</p>
             {% endif %}
         </div>
         {% endfor %}
     </div>
+    {% endif %}
 
+    {% if languages and languages|length > 0 %}
     <div class="section">
-        <h2 class="section-title">Yabancı Diller</h2>
-        {% for lang in languages %}
+        <h2 class="section-title">{{ translations.languages }}</h2>
+        {% for lang_item in languages %}
         <div>
-            <span>{{lang.name}} ({{lang.level}}/5)</span>
+            <span>{% if lang_item.name %}{{ lang_item.name }}{% endif %} {% if lang_item.level %}({{ lang_item.level }}/5 {{ translations.skill_level }}){% endif %}</span>
             <div class="skill-level">
-                <div class="skill-fill" style="width: {{lang.level * 20}}%"></div>
+                <div class="skill-fill" style="width: {{ lang_item.level|default:'3'|floatformat:'0'|add:'0'|multiply:20 }}%"></div>
             </div>
         </div>
         {% endfor %}
     </div>
+    {% endif %}
 
-    {% if certificates.length > 0 %}
+    {% if certificates and certificates|length > 0 %}
     <div class="section">
-        <h2 class="section-title">Sertifikalar</h2>
+        <h2 class="section-title">{{ translations.certificates }}</h2>
         {% for cert in certificates %}
         <div class="certificate-item">
-            <h4>{{cert.name}}</h4>
-            <div>{{cert.issuer}} - {{cert.date}}</div>
+            {% if cert.name %}<h4>{{ cert.name }}</h4>{% endif %}
+            <div>{% if cert.issuer %}{{ cert.issuer }}{% endif %}{% if cert.date %} - {{ cert.date }}{% endif %}</div>
             {% if cert.description %}
-            <p>{{cert.description}}</p>
+            <p>{{ cert.description }}</p>
             {% endif %}
         </div>
         {% endfor %}

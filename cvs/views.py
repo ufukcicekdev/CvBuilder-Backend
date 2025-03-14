@@ -7,7 +7,7 @@ from .serializers import CVSerializer, CVTranslationSerializer
 from rest_framework.authentication import TokenAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.viewsets import ModelViewSet
-from django.template.loader import render_to_string
+from django.template.loader import render_to_string, get_template
 from django.http import HttpResponse
 import tempfile
 import os
@@ -23,6 +23,12 @@ import uuid
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import boto3
+import time
+from datetime import datetime
+from django.db.models import Q
+import shutil
+import base64
+import traceback
 
 def get_cv_group_name(cv_id, translation_key, lang, template_id='1'):
     """CV WebSocket grup adını oluşturan yardımcı fonksiyon"""
@@ -752,7 +758,7 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
             # Şablon ID'sini al
             template_id = request.data.get('template_id')
             
-            # Yeni URL formatı: /cv/{template_id}/{cv_id}/{translation_key}/{lang}/
+            # Dinamik URL oluştur (şablon ID'sini de ekle)
             web_url = f'/cv/{template_id}/{cv.id}/{cv.translation_key}/{current_lang}/'
             
             return Response({
@@ -771,29 +777,136 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
     def generate_pdf(self, request, pk=None):
         try:
             cv = self.get_object()
-            template_id = request.data.get('template_id')
+            raw_template_id = request.data.get('template_id', 'modern')
             
-            # Get current language
-            current_lang = self._get_language_code(request)
-            translation = cv.translations.filter(language_code=current_lang).first()
-            
-            # Template seç
-            template_path = f'templates/pdf/{template_id}.html'
-            
-            # Context hazırla
-            context = {
-                'personal_info': translation.personal_info if translation else cv.personal_info,
-                'experience': translation.experience if translation else cv.experience,
-                'education': translation.education if translation else cv.education,
-                'skills': translation.skills if translation else cv.skills,
-                'languages': translation.languages if translation else cv.languages,
-                'certificates': translation.certificates if translation else []
+            # Frontend'den gelen template_id'yi backend şablon adına dönüştür
+            template_map = {
+                'modern': 'pdf-template1',
+                'classic': 'pdf-template2',
+                'minimal': 'pdf-template3',
+                'creative': 'pdf-template4',
+                'professional': 'pdf-template5',
+                'pdf-modern': 'pdf-template1',
+                'pdf-classic': 'pdf-template2',
+                'pdf-minimal': 'pdf-template3',
+                'pdf-creative': 'pdf-template4',
+                'pdf-professional': 'pdf-template5'
             }
+            
+            template_id = template_map.get(raw_template_id, 'pdf-template1')
+            
+            # Client tarafından gönderilen dil parametresini al
+            requested_lang = request.data.get('language', 'en')
+            
+            # CV verisini frontend'den almak yerine, _get_translated_data ile veritabanından al
+            cv_data = self._get_translated_data(cv, requested_lang)
+            
+            # Template seç - backend/templates/pdf klasöründeki şablonu kullan
+            template_path = f'pdf/{template_id}.html'
+            
+            print(f"Generate PDF - Using template: {template_id}, path: {template_path}, lang: {requested_lang}, cv_id: {cv.id}")
+            
+            # Şablonun varlığını kontrol et
+            try:
+                # Şablonu kontrol et
+                get_template(template_path)
+                print(f"Template found: {template_path}")
+            except TemplateDoesNotExist:
+                print(f"ERROR: Template does not exist: {template_path}")
+                return Response(
+                    {
+                        'error': f'Template not found: {template_path}',
+                        'template_id': template_id,
+                        'raw_template_id': raw_template_id
+                    }, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Dil metinlerini hazırla
+            translations = {
+                'en': {
+                    'summary': 'Summary',
+                    'experience': 'Work Experience',
+                    'education': 'Education',
+                    'skills': 'Skills',
+                    'languages': 'Languages',
+                    'certificates': 'Certificates',
+                    'present': 'Present',
+                    'skill_level': 'out of 5',
+                },
+                'tr': {
+                    'summary': 'Özet',
+                    'experience': 'İş Deneyimi',
+                    'education': 'Eğitim',
+                    'skills': 'Yetenekler',
+                    'languages': 'Yabancı Diller',
+                    'certificates': 'Sertifikalar',
+                    'present': 'Devam Ediyor',
+                    'skill_level': 'üzerinden 5',
+                },
+                'es': {
+                    'summary': 'Resumen',
+                    'experience': 'Experiencia Laboral',
+                    'education': 'Educación',
+                    'skills': 'Habilidades',
+                    'languages': 'Idiomas',
+                    'certificates': 'Certificados',
+                    'present': 'Presente',
+                    'skill_level': 'de 5',
+                },
+                'zh': {
+                    'summary': '摘要',
+                    'experience': '工作经验',
+                    'education': '教育背景',
+                    'skills': '技能',
+                    'languages': '语言能力',
+                    'certificates': '证书',
+                    'present': '至今',
+                    'skill_level': '满分5分',
+                },
+                'ar': {
+                    'summary': 'ملخص',
+                    'experience': 'الخبرة العملية',
+                    'education': 'التعليم',
+                    'skills': 'المهارات',
+                    'languages': 'اللغات',
+                    'certificates': 'الشهادات',
+                    'present': 'حتى الآن',
+                    'skill_level': 'من 5',
+                },
+                'hi': {
+                    'summary': 'सारांश',
+                    'experience': 'कार्य अनुभव',
+                    'education': 'शिक्षा',
+                    'skills': 'कौशल',
+                    'languages': 'भाषाएँ',
+                    'certificates': 'प्रमाणपत्र',
+                    'present': 'वर्तमान',
+                    'skill_level': '5 में से',
+                }
+            }
+            
+            # Seçili dil için çevirileri al, yoksa İngilizce varsayılan olarak kullan
+            text_translations = translations.get(requested_lang, translations['en'])
+            
+            # Context'i veritabanından alınan verilerden hazırla
+            context = {
+                'personal_info': cv_data.get('personal_info', {}),
+                'experience': cv_data.get('experience', []),
+                'education': cv_data.get('education', []),
+                'skills': cv_data.get('skills', []),
+                'languages': cv_data.get('languages', []),
+                'certificates': cv_data.get('certificates', []),
+                'translations': text_translations,
+                'lang': requested_lang
+            }
+            
+            print(f"Rendering template: {template_path}")
             
             # HTML oluştur
             html_content = render_to_string(template_path, context)
             
-            # PDF oluştur
+            # PDF oluşturma seçenekleri
             options = {
                 'page-size': 'A4',
                 'margin-top': '0.75in',
@@ -803,20 +916,60 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
                 'encoding': "UTF-8",
             }
             
-            # PDF'i kaydet
-            filename = f'cv_{cv.id}_{template_id}.pdf'
-            filepath = os.path.join(settings.MEDIA_ROOT, 'cv_pdf', filename)
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            # Dosya adını CV başlığı ile oluştur
+            cv_title = cv.title if cv.title else f'cv_{cv.id}'
+            # Dosya adından geçersiz karakterleri temizle
+            safe_filename = "".join([c for c in cv_title if c.isalpha() or c.isdigit() or c == ' ']).strip()
+            safe_filename = safe_filename.replace(' ', '_')
+            filename = f'{safe_filename}_{requested_lang}.pdf'
+
+            # Geçici dosya yolu tanımla
+            temp_filepath = os.path.join(tempfile.gettempdir(), filename)
             
-            pdfkit.from_string(html_content, filepath, options=options)
-            
-            pdf_url = f'{settings.MEDIA_URL}cv_pdf/{filename}'
-            
-            return Response({'pdf_url': pdf_url})
-            
+            try:
+                # PDF dosyasını geçici olarak oluştur
+                print(f"Generating PDF to: {temp_filepath}")
+                pdfkit.from_string(html_content, temp_filepath, options=options)
+                print(f"PDF generated successfully: {temp_filepath}")
+                
+                # PDF'i binary olarak oku
+                with open(temp_filepath, 'rb') as pdf_file:
+                    pdf_content = pdf_file.read()
+                
+                # Geçici dosyayı sil
+                os.remove(temp_filepath)
+                
+                # PDF içeriğini base64 olarak kodla
+                pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
+                
+                # Tarayıcının doğrudan indirmesi için PDF içeriğini yanıtta döndür
+                return Response({
+                    'pdf_base64': pdf_base64,
+                    'filename': filename,
+                    'content_type': 'application/pdf'
+                })
+                
+            except Exception as e:
+                traceback_str = traceback.format_exc()
+                print(f"PDF Generation Error: {str(e)}")
+                print(f"Traceback: {traceback_str}")
+                return Response(
+                    {
+                        'error': str(e),
+                        'traceback': traceback_str
+                    }, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
         except Exception as e:
+            traceback_str = traceback.format_exc()
+            print(f"PDF Generation Error: {str(e)}")
+            print(f"Traceback: {traceback_str}")
             return Response(
-                {'error': str(e)}, 
+                {
+                    'error': str(e),
+                    'traceback': traceback_str
+                }, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -1463,29 +1616,136 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
     def generate_pdf(self, request, pk=None):
         try:
             cv = self.get_object()
-            template_id = request.data.get('template_id')
+            raw_template_id = request.data.get('template_id', 'modern')
             
-            # Get current language
-            current_lang = self._get_language_code(request)
-            translation = cv.translations.filter(language_code=current_lang).first()
-            
-            # Template seç
-            template_path = f'templates/pdf/{template_id}.html'
-            
-            # Context hazırla
-            context = {
-                'personal_info': translation.personal_info if translation else cv.personal_info,
-                'experience': translation.experience if translation else cv.experience,
-                'education': translation.education if translation else cv.education,
-                'skills': translation.skills if translation else cv.skills,
-                'languages': translation.languages if translation else cv.languages,
-                'certificates': translation.certificates if translation else []
+            # Frontend'den gelen template_id'yi backend şablon adına dönüştür
+            template_map = {
+                'modern': 'pdf-template1',
+                'classic': 'pdf-template2',
+                'minimal': 'pdf-template3',
+                'creative': 'pdf-template4',
+                'professional': 'pdf-template5',
+                'pdf-modern': 'pdf-template1',
+                'pdf-classic': 'pdf-template2',
+                'pdf-minimal': 'pdf-template3',
+                'pdf-creative': 'pdf-template4',
+                'pdf-professional': 'pdf-template5'
             }
+            
+            template_id = template_map.get(raw_template_id, 'pdf-template1')
+            
+            # Client tarafından gönderilen dil parametresini al
+            requested_lang = request.data.get('language', 'en')
+            
+            # CV verisini frontend'den almak yerine, _get_translated_data ile veritabanından al
+            cv_data = self._get_translated_data(cv, requested_lang)
+            
+            # Template seç - backend/templates/pdf klasöründeki şablonu kullan
+            template_path = f'pdf/{template_id}.html'
+            
+            print(f"Generate PDF - Using template: {template_id}, path: {template_path}, lang: {requested_lang}, cv_id: {cv.id}")
+            
+            # Şablonun varlığını kontrol et
+            try:
+                # Şablonu kontrol et
+                get_template(template_path)
+                print(f"Template found: {template_path}")
+            except TemplateDoesNotExist:
+                print(f"ERROR: Template does not exist: {template_path}")
+                return Response(
+                    {
+                        'error': f'Template not found: {template_path}',
+                        'template_id': template_id,
+                        'raw_template_id': raw_template_id
+                    }, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Dil metinlerini hazırla
+            translations = {
+                'en': {
+                    'summary': 'Summary',
+                    'experience': 'Work Experience',
+                    'education': 'Education',
+                    'skills': 'Skills',
+                    'languages': 'Languages',
+                    'certificates': 'Certificates',
+                    'present': 'Present',
+                    'skill_level': 'out of 5',
+                },
+                'tr': {
+                    'summary': 'Özet',
+                    'experience': 'İş Deneyimi',
+                    'education': 'Eğitim',
+                    'skills': 'Yetenekler',
+                    'languages': 'Yabancı Diller',
+                    'certificates': 'Sertifikalar',
+                    'present': 'Devam Ediyor',
+                    'skill_level': 'üzerinden 5',
+                },
+                'es': {
+                    'summary': 'Resumen',
+                    'experience': 'Experiencia Laboral',
+                    'education': 'Educación',
+                    'skills': 'Habilidades',
+                    'languages': 'Idiomas',
+                    'certificates': 'Certificados',
+                    'present': 'Presente',
+                    'skill_level': 'de 5',
+                },
+                'zh': {
+                    'summary': '摘要',
+                    'experience': '工作经验',
+                    'education': '教育背景',
+                    'skills': '技能',
+                    'languages': '语言能力',
+                    'certificates': '证书',
+                    'present': '至今',
+                    'skill_level': '满分5分',
+                },
+                'ar': {
+                    'summary': 'ملخص',
+                    'experience': 'الخبرة العملية',
+                    'education': 'التعليم',
+                    'skills': 'المهارات',
+                    'languages': 'اللغات',
+                    'certificates': 'الشهادات',
+                    'present': 'حتى الآن',
+                    'skill_level': 'من 5',
+                },
+                'hi': {
+                    'summary': 'सारांश',
+                    'experience': 'कार्य अनुभव',
+                    'education': 'शिक्षा',
+                    'skills': 'कौशल',
+                    'languages': 'भाषाएँ',
+                    'certificates': 'प्रमाणपत्र',
+                    'present': 'वर्तमान',
+                    'skill_level': '5 में से',
+                }
+            }
+            
+            # Seçili dil için çevirileri al, yoksa İngilizce varsayılan olarak kullan
+            text_translations = translations.get(requested_lang, translations['en'])
+            
+            # Context'i veritabanından alınan verilerden hazırla
+            context = {
+                'personal_info': cv_data.get('personal_info', {}),
+                'experience': cv_data.get('experience', []),
+                'education': cv_data.get('education', []),
+                'skills': cv_data.get('skills', []),
+                'languages': cv_data.get('languages', []),
+                'certificates': cv_data.get('certificates', []),
+                'translations': text_translations,
+                'lang': requested_lang
+            }
+            
+            print(f"Rendering template: {template_path}")
             
             # HTML oluştur
             html_content = render_to_string(template_path, context)
             
-            # PDF oluştur
+            # PDF oluşturma seçenekleri
             options = {
                 'page-size': 'A4',
                 'margin-top': '0.75in',
@@ -1495,20 +1755,60 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
                 'encoding': "UTF-8",
             }
             
-            # PDF'i kaydet
-            filename = f'cv_{cv.id}_{template_id}.pdf'
-            filepath = os.path.join(settings.MEDIA_ROOT, 'cv_pdf', filename)
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            # Dosya adını CV başlığı ile oluştur
+            cv_title = cv.title if cv.title else f'cv_{cv.id}'
+            # Dosya adından geçersiz karakterleri temizle
+            safe_filename = "".join([c for c in cv_title if c.isalpha() or c.isdigit() or c == ' ']).strip()
+            safe_filename = safe_filename.replace(' ', '_')
+            filename = f'{safe_filename}_{requested_lang}.pdf'
+
+            # Geçici dosya yolu tanımla
+            temp_filepath = os.path.join(tempfile.gettempdir(), filename)
             
-            pdfkit.from_string(html_content, filepath, options=options)
-            
-            pdf_url = f'{settings.MEDIA_URL}cv_pdf/{filename}'
-            
-            return Response({'pdf_url': pdf_url})
-            
+            try:
+                # PDF dosyasını geçici olarak oluştur
+                print(f"Generating PDF to: {temp_filepath}")
+                pdfkit.from_string(html_content, temp_filepath, options=options)
+                print(f"PDF generated successfully: {temp_filepath}")
+                
+                # PDF'i binary olarak oku
+                with open(temp_filepath, 'rb') as pdf_file:
+                    pdf_content = pdf_file.read()
+                
+                # Geçici dosyayı sil
+                os.remove(temp_filepath)
+                
+                # PDF içeriğini base64 olarak kodla
+                pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
+                
+                # Tarayıcının doğrudan indirmesi için PDF içeriğini yanıtta döndür
+                return Response({
+                    'pdf_base64': pdf_base64,
+                    'filename': filename,
+                    'content_type': 'application/pdf'
+                })
+                
+            except Exception as e:
+                traceback_str = traceback.format_exc()
+                print(f"PDF Generation Error: {str(e)}")
+                print(f"Traceback: {traceback_str}")
+                return Response(
+                    {
+                        'error': str(e),
+                        'traceback': traceback_str
+                    }, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
         except Exception as e:
+            traceback_str = traceback.format_exc()
+            print(f"PDF Generation Error: {str(e)}")
+            print(f"Traceback: {traceback_str}")
             return Response(
-                {'error': str(e)}, 
+                {
+                    'error': str(e),
+                    'traceback': traceback_str
+                }, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 

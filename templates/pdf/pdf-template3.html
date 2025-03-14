@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+{% load cv_filters %}
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>CV</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 40px;
+            background-color: #fff;
+        }
+
+        .header {
+            position: relative;
+            padding-left: 10px;
+            margin-bottom: 30px;
+        }
+
+        .header:before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 4px;
+            background-color: #555;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            color: #777;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .contact-info {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .section {
+            margin: 30px 0;
+        }
+
+        .section-title {
+            font-size: 20px;
+            color: #333;
+            border-bottom: 0.5px solid #ddd;
+            padding-bottom: 8px;
+            margin-bottom: 15px;
+        }
+
+        .experience-item, .education-item {
+            margin-bottom: 20px;
+        }
+
+        .item-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .item-subtitle {
+            color: #555;
+            margin-bottom: 5px;
+        }
+
+        .item-date {
+            color: #777;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .item-description {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .skill-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .skill-name {
+            flex: 1;
+        }
+
+        .skill-level-container {
+            flex: 1;
+            max-width: 180px;
+        }
+
+        .skill-level {
+            height: 8px;
+            background: #eee;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .skill-fill {
+            height: 100%;
+            background: #555;
+        }
+
+        .page-break {
+            page-break-after: always;
+        }
+        
+        /* Add right-to-left support for Arabic */
+        {% if lang == 'ar' %}
+        body {
+            direction: rtl;
+            text-align: right;
+        }
+        .header:before {
+            left: auto;
+            right: 0;
+        }
+        .header {
+            padding-left: 0;
+            padding-right: 10px;
+        }
+        {% endif %}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{% if personal_info.first_name %}{{ personal_info.first_name }}{% endif %} {% if personal_info.last_name %}{{ personal_info.last_name }}{% endif %}</h1>
+        {% if personal_info.title %}<div class="subtitle">{{ personal_info.title }}</div>{% endif %}
+        <div class="contact-info">
+            {% if personal_info.email %}<div>{{ personal_info.email }}{% if personal_info.phone %} | {{ personal_info.phone }}{% endif %}</div>{% endif %}
+            {% if personal_info.location %}<div>{{ personal_info.location }}</div>{% endif %}
+        </div>
+    </div>
+
+    {% if personal_info.summary %}
+    <div class="section">
+        <h2 class="section-title">{{ translations.summary }}</h2>
+        <p>{{ personal_info.summary }}</p>
+    </div>
+    {% endif %}
+
+    {% if experience and experience|length > 0 %}
+    <div class="section">
+        <h2 class="section-title">{{ translations.experience }}</h2>
+        {% for exp in experience %}
+        <div class="experience-item">
+            {% if exp.position %}<div class="item-title">{{ exp.position }}</div>{% endif %}
+            <div class="item-subtitle">{% if exp.company %}{{ exp.company }}{% endif %}{% if exp.location %} • {{ exp.location }}{% endif %}</div>
+            <div class="item-date">{% if exp.start_date %}{{ exp.start_date }}{% endif %} - {% if exp.is_current %}{{ translations.present }}{% elif exp.end_date %}{{ exp.end_date }}{% endif %}</div>
+            {% if exp.description %}<div class="item-description">{{ exp.description }}</div>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if education and education|length > 0 %}
+    <div class="section">
+        <h2 class="section-title">{{ translations.education }}</h2>
+        {% for edu in education %}
+        <div class="education-item">
+            {% if edu.degree %}<div class="item-title">{{ edu.degree }}</div>{% endif %}
+            <div class="item-subtitle">{% if edu.school %}{{ edu.school }}{% endif %}{% if edu.location %} • {{ edu.location }}{% endif %}</div>
+            <div class="item-date">{% if edu.start_date %}{{ edu.start_date }}{% endif %} - {% if edu.is_current %}{{ translations.present }}{% elif edu.end_date %}{{ edu.end_date }}{% endif %}</div>
+            {% if edu.description %}<div class="item-description">{{ edu.description }}</div>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if skills and skills|length > 0 %}
+    <div class="section">
+        <h2 class="section-title">{{ translations.skills }}</h2>
+        {% for skill in skills %}
+        <div class="skill-row">
+            <div class="skill-name">{% if skill.name %}{{ skill.name }}{% endif %}</div>
+            <div class="skill-level-container">
+                <div class="skill-level">
+                    <div class="skill-fill" style="width: {{ skill.level|default:'3'|floatformat:'0'|add:'0'|multiply:20 }}%"></div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if languages and languages|length > 0 %}
+    <div class="section">
+        <h2 class="section-title">{{ translations.languages }}</h2>
+        {% for lang_item in languages %}
+        <div class="skill-row">
+            <div class="skill-name">{% if lang_item.name %}{{ lang_item.name }}{% endif %}</div>
+            <div class="skill-level-container">
+                <div class="skill-level">
+                    <div class="skill-fill" style="width: {{ lang_item.level|default:'3'|floatformat:'0'|add:'0'|multiply:20 }}%"></div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if certificates and certificates|length > 0 %}
+    <div class="section">
+        <h2 class="section-title">{{ translations.certificates }}</h2>
+        {% for cert in certificates %}
+        <div class="certificate-item">
+            {% if cert.name %}<div class="item-title">{{ cert.name }}</div>{% endif %}
+            <div class="item-subtitle">{% if cert.issuer %}{{ cert.issuer }}{% endif %}{% if cert.date %} - {{ cert.date }}{% endif %}</div>
+            {% if cert.description %}<div class="item-description">{{ cert.description }}</div>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</body>
+</html> 
