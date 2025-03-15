@@ -3,7 +3,7 @@ builder = "nixpacks"
 buildCommand = ""
 
 [variables]
-NIXPACKS_PKGS = "wget wkhtmltopdf"
+NIXPACKS_PKGS = "wget"
 
 [deploy]
 numReplicas = 1
