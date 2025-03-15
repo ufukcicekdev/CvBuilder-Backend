@@ -11,7 +11,7 @@ from django.template.loader import render_to_string, get_template
 from django.http import HttpResponse
 import tempfile
 import os
-import pdfkit
+from weasyprint import HTML, CSS
 from django.conf import settings
 from django.template import TemplateDoesNotExist
 from .services import TranslationService
@@ -906,16 +906,6 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
             # HTML oluştur
             html_content = render_to_string(template_path, context)
             
-            # PDF oluşturma seçenekleri
-            options = {
-                'page-size': 'A4',
-                'margin-top': '0.75in',
-                'margin-right': '0.75in',
-                'margin-bottom': '0.75in',
-                'margin-left': '0.75in',
-                'encoding': "UTF-8",
-            }
-            
             # Dosya adını CV başlığı ile oluştur
             cv_title = cv.title if cv.title else f'cv_{cv.id}'
             # Dosya adından geçersiz karakterleri temizle
@@ -927,9 +917,12 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
             temp_filepath = os.path.join(tempfile.gettempdir(), filename)
             
             try:
-                # PDF dosyasını geçici olarak oluştur
+                # WeasyPrint ile PDF oluştur
                 print(f"Generating PDF to: {temp_filepath}")
-                pdfkit.from_string(html_content, temp_filepath, options=options)
+                # String'ten HTML nesnesi oluştur
+                html = HTML(string=html_content)
+                # PDF oluştur ve geçici dosyaya kaydet
+                html.write_pdf(temp_filepath)
                 print(f"PDF generated successfully: {temp_filepath}")
                 
                 # PDF'i binary olarak oku
@@ -1745,16 +1738,6 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
             # HTML oluştur
             html_content = render_to_string(template_path, context)
             
-            # PDF oluşturma seçenekleri
-            options = {
-                'page-size': 'A4',
-                'margin-top': '0.75in',
-                'margin-right': '0.75in',
-                'margin-bottom': '0.75in',
-                'margin-left': '0.75in',
-                'encoding': "UTF-8",
-            }
-            
             # Dosya adını CV başlığı ile oluştur
             cv_title = cv.title if cv.title else f'cv_{cv.id}'
             # Dosya adından geçersiz karakterleri temizle
@@ -1766,9 +1749,12 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
             temp_filepath = os.path.join(tempfile.gettempdir(), filename)
             
             try:
-                # PDF dosyasını geçici olarak oluştur
+                # WeasyPrint ile PDF oluştur
                 print(f"Generating PDF to: {temp_filepath}")
-                pdfkit.from_string(html_content, temp_filepath, options=options)
+                # String'ten HTML nesnesi oluştur
+                html = HTML(string=html_content)
+                # PDF oluştur ve geçici dosyaya kaydet
+                html.write_pdf(temp_filepath)
                 print(f"PDF generated successfully: {temp_filepath}")
                 
                 # PDF'i binary olarak oku
