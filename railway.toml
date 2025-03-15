@@ -3,7 +3,7 @@ builder = "nixpacks"
 buildCommand = ""
 
 [variables]
-NIXPACKS_PKGS = "wget libpango-1.0-0 libharfbuzz0b libpangoft2-1.0-0 libgdk-pixbuf2.0-0 libffi-dev shared-mime-info libcairo2 libgobject-2.0-0 libgirepository1.0-dev"
+NIXPACKS_PKGS = "glib gobject-introspection cairo pango harfbuzz gdk-pixbuf librsvg gtk3"
 
 [deploy]
 numReplicas = 1
