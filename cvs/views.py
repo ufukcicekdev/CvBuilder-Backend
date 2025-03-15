@@ -11,8 +11,6 @@ from django.template.loader import render_to_string, get_template
 from django.http import HttpResponse
 import tempfile
 import os
-from weasyprint import HTML, CSS
-from django.conf import settings
 from django.template import TemplateDoesNotExist
 from .services import TranslationService
 import json
@@ -29,6 +27,15 @@ from django.db.models import Q
 import shutil
 import base64
 import traceback
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch, cm
+from reportlab.pdfgen import canvas
+import html2text
+import logging
+from django.shortcuts import get_object_or_404
 
 def get_cv_group_name(cv_id, translation_key, lang, template_id='1'):
     """CV WebSocket grup adını oluşturan yardımcı fonksiyon"""
@@ -691,48 +698,6 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
         print("="*50)
         return self.update(request, *args, **kwargs)
 
-    def _translate_modified_fields(self, instance, current_lang, modified_fields):
-        """Helper method to translate modified fields to other languages"""
-        client = openai.OpenAI()
-        
-        for lang_code, lang_name in self.SUPPORTED_LANGUAGES.items():
-            if lang_code != current_lang:
-                try:
-                    trans, _ = CVTranslation.objects.get_or_create(
-                        cv=instance,
-                        language_code=lang_code
-                    )
-                    
-                    for field, value in modified_fields.items():
-                        prompt = f"""Please translate the following {field} content to {lang_name}. 
-                        Keep the JSON structure exactly the same, only translate the text content.
-                        
-                        Content to translate:
-                        {json.dumps(value, ensure_ascii=False)}
-                        """
-                        
-                        try:
-                            response = client.chat.completions.create(
-                                model="gpt-4",
-                                messages=[
-                                    {"role": "system", "content": "You are a professional translator."},
-                                    {"role": "user", "content": prompt}
-                                ],
-                                response_format={"type": "json_object"}
-                            )
-                            
-                            translated_content = json.loads(response.choices[0].message.content)
-                            setattr(trans, field, translated_content)
-                            
-                        except Exception as e:
-                            print(f"Error translating {field} for {lang_code}: {str(e)}")
-                            setattr(trans, field, value)
-                    
-                    trans.save()
-                    
-                except Exception as e:
-                    print(f"Error handling translation for {lang_code}: {str(e)}")
-
     @action(detail=True, methods=['post'])
     def update_step(self, request, pk=None):
         cv = self.get_object()
@@ -917,12 +882,103 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
             temp_filepath = os.path.join(tempfile.gettempdir(), filename)
             
             try:
-                # WeasyPrint ile PDF oluştur
                 print(f"Generating PDF to: {temp_filepath}")
-                # String'ten HTML nesnesi oluştur
-                html = HTML(string=html_content)
-                # PDF oluştur ve geçici dosyaya kaydet
-                html.write_pdf(temp_filepath)
+                
+                # HTML içeriğinden düz metin elde et
+                h2t = html2text.HTML2Text()
+                h2t.ignore_links = False
+                text_content = h2t.handle(html_content)
+                
+                # ReportLab ile PDF oluştur
+                doc = SimpleDocTemplate(temp_filepath, pagesize=A4)
+                styles = getSampleStyleSheet()
+                elements = []
+                
+                # Başlık ve kişisel bilgiler
+                name = cv_data.get('personal_info', {}).get('name', 'CV')
+                title = cv_data.get('personal_info', {}).get('title', '')
+                
+                title_style = styles['Title']
+                subtitle_style = styles['Heading2']
+                normal_style = styles['Normal']
+                heading_style = styles['Heading3']
+                
+                elements.append(Paragraph(name, title_style))
+                if title:
+                    elements.append(Paragraph(title, subtitle_style))
+                elements.append(Spacer(1, 0.5*cm))
+                
+                # Özet
+                summary = cv_data.get('personal_info', {}).get('summary', '')
+                if summary:
+                    elements.append(Paragraph(text_translations.get('summary', 'Summary'), heading_style))
+                    elements.append(Paragraph(summary, normal_style))
+                    elements.append(Spacer(1, 0.5*cm))
+                
+                # İş Deneyimi
+                experiences = cv_data.get('experience', [])
+                if experiences:
+                    elements.append(Paragraph(text_translations.get('experience', 'Work Experience'), heading_style))
+                    for exp in experiences:
+                        exp_title = f"{exp.get('position', '')} - {exp.get('company', '')}"
+                        exp_date = f"{exp.get('start_date', '')} - {exp.get('end_date', '') or text_translations.get('present', 'Present')}"
+                        elements.append(Paragraph(exp_title, subtitle_style))
+                        elements.append(Paragraph(exp_date, normal_style))
+                        elements.append(Paragraph(exp.get('description', ''), normal_style))
+                        elements.append(Spacer(1, 0.3*cm))
+                    elements.append(Spacer(1, 0.5*cm))
+                
+                # Eğitim
+                educations = cv_data.get('education', [])
+                if educations:
+                    elements.append(Paragraph(text_translations.get('education', 'Education'), heading_style))
+                    for edu in educations:
+                        edu_title = f"{edu.get('degree', '')} - {edu.get('field', '')}"
+                        edu_school = edu.get('school', '')
+                        edu_date = f"{edu.get('start_date', '')} - {edu.get('end_date', '') or text_translations.get('present', 'Present')}"
+                        
+                        elements.append(Paragraph(edu_title, subtitle_style))
+                        elements.append(Paragraph(edu_school, normal_style))
+                        elements.append(Paragraph(edu_date, normal_style))
+                        if edu.get('description'):
+                            elements.append(Paragraph(edu.get('description', ''), normal_style))
+                        elements.append(Spacer(1, 0.3*cm))
+                    elements.append(Spacer(1, 0.5*cm))
+                
+                # Yetenekler
+                skills = cv_data.get('skills', [])
+                if skills:
+                    elements.append(Paragraph(text_translations.get('skills', 'Skills'), heading_style))
+                    for skill in skills:
+                        skill_text = f"{skill.get('name', '')} - {skill.get('level', 0)}/5"
+                        elements.append(Paragraph(skill_text, normal_style))
+                    elements.append(Spacer(1, 0.5*cm))
+                
+                # Diller
+                languages = cv_data.get('languages', [])
+                if languages:
+                    elements.append(Paragraph(text_translations.get('languages', 'Languages'), heading_style))
+                    for lang in languages:
+                        lang_text = f"{lang.get('name', '')} - {lang.get('level', '')}"
+                        elements.append(Paragraph(lang_text, normal_style))
+                    elements.append(Spacer(1, 0.5*cm))
+                
+                # Sertifikalar
+                certificates = cv_data.get('certificates', [])
+                if certificates:
+                    elements.append(Paragraph(text_translations.get('certificates', 'Certificates'), heading_style))
+                    for cert in certificates:
+                        cert_title = f"{cert.get('name', '')} - {cert.get('issuer', '')}"
+                        cert_date = cert.get('date', '')
+                        elements.append(Paragraph(cert_title, subtitle_style))
+                        if cert_date:
+                            elements.append(Paragraph(cert_date, normal_style))
+                        if cert.get('description'):
+                            elements.append(Paragraph(cert.get('description', ''), normal_style))
+                        elements.append(Spacer(1, 0.3*cm))
+                
+                # PDF oluştur
+                doc.build(elements)
                 print(f"PDF generated successfully: {temp_filepath}")
                 
                 # PDF'i binary olarak oku
@@ -1749,12 +1805,103 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
             temp_filepath = os.path.join(tempfile.gettempdir(), filename)
             
             try:
-                # WeasyPrint ile PDF oluştur
                 print(f"Generating PDF to: {temp_filepath}")
-                # String'ten HTML nesnesi oluştur
-                html = HTML(string=html_content)
-                # PDF oluştur ve geçici dosyaya kaydet
-                html.write_pdf(temp_filepath)
+                
+                # HTML içeriğinden düz metin elde et
+                h2t = html2text.HTML2Text()
+                h2t.ignore_links = False
+                text_content = h2t.handle(html_content)
+                
+                # ReportLab ile PDF oluştur
+                doc = SimpleDocTemplate(temp_filepath, pagesize=A4)
+                styles = getSampleStyleSheet()
+                elements = []
+                
+                # Başlık ve kişisel bilgiler
+                name = cv_data.get('personal_info', {}).get('name', 'CV')
+                title = cv_data.get('personal_info', {}).get('title', '')
+                
+                title_style = styles['Title']
+                subtitle_style = styles['Heading2']
+                normal_style = styles['Normal']
+                heading_style = styles['Heading3']
+                
+                elements.append(Paragraph(name, title_style))
+                if title:
+                    elements.append(Paragraph(title, subtitle_style))
+                elements.append(Spacer(1, 0.5*cm))
+                
+                # Özet
+                summary = cv_data.get('personal_info', {}).get('summary', '')
+                if summary:
+                    elements.append(Paragraph(text_translations.get('summary', 'Summary'), heading_style))
+                    elements.append(Paragraph(summary, normal_style))
+                    elements.append(Spacer(1, 0.5*cm))
+                
+                # İş Deneyimi
+                experiences = cv_data.get('experience', [])
+                if experiences:
+                    elements.append(Paragraph(text_translations.get('experience', 'Work Experience'), heading_style))
+                    for exp in experiences:
+                        exp_title = f"{exp.get('position', '')} - {exp.get('company', '')}"
+                        exp_date = f"{exp.get('start_date', '')} - {exp.get('end_date', '') or text_translations.get('present', 'Present')}"
+                        elements.append(Paragraph(exp_title, subtitle_style))
+                        elements.append(Paragraph(exp_date, normal_style))
+                        elements.append(Paragraph(exp.get('description', ''), normal_style))
+                        elements.append(Spacer(1, 0.3*cm))
+                    elements.append(Spacer(1, 0.5*cm))
+                
+                # Eğitim
+                educations = cv_data.get('education', [])
+                if educations:
+                    elements.append(Paragraph(text_translations.get('education', 'Education'), heading_style))
+                    for edu in educations:
+                        edu_title = f"{edu.get('degree', '')} - {edu.get('field', '')}"
+                        edu_school = edu.get('school', '')
+                        edu_date = f"{edu.get('start_date', '')} - {edu.get('end_date', '') or text_translations.get('present', 'Present')}"
+                        
+                        elements.append(Paragraph(edu_title, subtitle_style))
+                        elements.append(Paragraph(edu_school, normal_style))
+                        elements.append(Paragraph(edu_date, normal_style))
+                        if edu.get('description'):
+                            elements.append(Paragraph(edu.get('description', ''), normal_style))
+                        elements.append(Spacer(1, 0.3*cm))
+                    elements.append(Spacer(1, 0.5*cm))
+                
+                # Yetenekler
+                skills = cv_data.get('skills', [])
+                if skills:
+                    elements.append(Paragraph(text_translations.get('skills', 'Skills'), heading_style))
+                    for skill in skills:
+                        skill_text = f"{skill.get('name', '')} - {skill.get('level', 0)}/5"
+                        elements.append(Paragraph(skill_text, normal_style))
+                    elements.append(Spacer(1, 0.5*cm))
+                
+                # Diller
+                languages = cv_data.get('languages', [])
+                if languages:
+                    elements.append(Paragraph(text_translations.get('languages', 'Languages'), heading_style))
+                    for lang in languages:
+                        lang_text = f"{lang.get('name', '')} - {lang.get('level', '')}"
+                        elements.append(Paragraph(lang_text, normal_style))
+                    elements.append(Spacer(1, 0.5*cm))
+                
+                # Sertifikalar
+                certificates = cv_data.get('certificates', [])
+                if certificates:
+                    elements.append(Paragraph(text_translations.get('certificates', 'Certificates'), heading_style))
+                    for cert in certificates:
+                        cert_title = f"{cert.get('name', '')} - {cert.get('issuer', '')}"
+                        cert_date = cert.get('date', '')
+                        elements.append(Paragraph(cert_title, subtitle_style))
+                        if cert_date:
+                            elements.append(Paragraph(cert_date, normal_style))
+                        if cert.get('description'):
+                            elements.append(Paragraph(cert.get('description', ''), normal_style))
+                        elements.append(Spacer(1, 0.3*cm))
+                
+                # PDF oluştur
+                doc.build(elements)
                 print(f"PDF generated successfully: {temp_filepath}")
                 
                 # PDF'i binary olarak oku

@@ -3,7 +3,7 @@ builder = "nixpacks"
 buildCommand = ""
 
 [variables]
-NIXPACKS_PKGS = "glib gobject-introspection cairo pango harfbuzz gdk-pixbuf librsvg gtk3"
+NIXPACKS_PKGS = ""
 
 [deploy]
 numReplicas = 1
