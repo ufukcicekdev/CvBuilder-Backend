@@ -1,4 +1,3 @@
-import iyzipay
 import uuid
 import json
 from django.conf import settings
