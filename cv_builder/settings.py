@@ -43,7 +43,6 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'cv_builder.middleware.WebhookCsrfExemptMiddleware',  # Add custom middleware for webhook CSRF exemption
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -115,8 +114,6 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "https://cvbuilder.tech",
     "https://www.cvbuilder.tech",
-    "https://webhook.paddle.com",  # Paddle webhook origin
-    "https://sandbox-webhook.paddle.com",  # Paddle sandbox webhook origin
 ]
 
 CORS_ALLOW_METHODS = [
@@ -138,12 +135,6 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
-    'paddle-signature',  # Added for Paddle webhook
-]
-
-# Allowing additional headers specifically for Paddle webhooks
-CORS_EXPOSE_HEADERS = [
-    'paddle-signature',
 ]
 
 # WebSocket için CORS ayarları
@@ -406,7 +397,10 @@ PADDLE_SETTINGS = {
     'sandbox': PADDLE_SANDBOX
 }
 
-# Disabling CSRF for webhook endpoints to allow Paddle to post
-CSRF_EXEMPT_URLS = [
-    r'^api/subscriptions/webhook/$',
+# CSRF ile ilgili eklediğimiz ayarları tamamen kaldıralım
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://cvbuilder.tech",
+    "https://www.cvbuilder.tech",
 ]

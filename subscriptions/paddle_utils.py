@@ -279,46 +279,16 @@ def verify_webhook_signature(headers, payload_json):
             print(f"Missing timestamp or hash in header: {signature_header}")
             return False
         
-        # For debugging
-        print(f"Timestamp: {timestamp}")
-        print(f"Signature: {signature}")
-        
         # Create the string to verify
         # Format: timestamp + payload
         data_to_verify = f"{timestamp}:{payload_json}"
         
-        # In Paddle v2, the public key needs to be properly decoded
-        # The key format is: pdl_ntfset_XXXXX_YYYYY
-        # We only need the YYYYY part
-        # If key doesn't contain underscore, use as is (for backwards compatibility)
-        if '_' in public_key:
-            key_parts = public_key.split('_')
-            if len(key_parts) >= 4:
-                public_key = key_parts[3]
-        
-        # Replace problematic characters in the key
-        public_key = public_key.replace(' ', '').replace('+', '+').replace('/', '/')
-        
-        # For debugging
-        print(f"Using public key: {public_key}")
-        
-        # Try to base64 decode the key for HMAC
-        try:
-            # Try to decode if it looks like base64
-            decoded_key = base64.b64decode(public_key)
-        except:
-            # If not decodable, use as is
-            decoded_key = public_key.encode('utf-8')
-        
         # Calculate expected signature
         expected_signature = hmac.new(
-            decoded_key,
+            base64.b64decode(public_key),
             data_to_verify.encode('utf-8'),
             hashlib.sha256
         ).hexdigest()
-        
-        # For debugging
-        print(f"Expected signature: {expected_signature}")
         
         # Compare signatures
         return hmac.compare_digest(signature, expected_signature)
