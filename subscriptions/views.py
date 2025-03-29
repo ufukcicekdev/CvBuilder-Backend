@@ -328,9 +328,8 @@ class PaddleWebhookView(APIView):
             print("❌ Missing Paddle-Signature header")
             return False
         
-        # Get public key and webhook ID from settings
-        public_key = getattr(settings, 'PADDLE_PUBLIC_KEY', None)
-        webhook_id = getattr(settings, 'PADDLE_WEBHOOK_ID', None)
+        # Get webhook secret key from settings
+        webhook_secret = getattr(settings, 'PADDLE_WEBHOOK_SECRET', None)
         
         # Check if we're in sandbox mode
         sandbox_mode = getattr(settings, 'PADDLE_SANDBOX', False)
@@ -338,138 +337,53 @@ class PaddleWebhookView(APIView):
         # Print full signature header for debugging
         print(f"📝 Received signature header: {signature_header}")
         
-        # Check if the Paddle-Signature is just the webhook ID
-        # This is a simple authentication mode where Paddle just sends the notification ID
-        if signature_header == webhook_id:
-            print(f"✅ Webhook ID matched: {webhook_id}")
+        # For testing in development/sandbox environment
+        if sandbox_mode:
+            print("⚠️ SANDBOX MODE: Bypassing signature verification")
             return True
             
-        # For normal operation with standard signature checking
-        if not public_key or public_key == 'your_public_key':
-            print("❌ Missing or invalid Paddle public key in settings")
-            # Return True for testing in development environment
-            if sandbox_mode:
-                print("⚠️ Sandbox mode enabled - bypassing signature verification")
-                return True
+        # For production, validate the signature
+        if not webhook_secret:
+            print("❌ Missing Paddle webhook secret in settings")
             return False
         
         try:
-            # First check if this webhook matches our webhook ID by parsing the payload
-            try:
-                webhook_data = json.loads(payload_json)
-                
-                # Extract the webhook notification ID if present in the payload
-                webhook_notification_id = webhook_data.get('notification_id', '')
-                
-                # If we have a webhook ID configured and it matches the one in the payload
-                if webhook_id and webhook_notification_id and webhook_id == webhook_notification_id:
-                    print(f"✅ Webhook ID in payload matched: {webhook_id}")
-                    # In this case, we can consider this a valid webhook without further verification
-                    return True
-                    
-                # Extract event ID as an alternative identifier
-                event_id = webhook_data.get('event_id', '')
-                if webhook_id and event_id and webhook_id in event_id:
-                    print(f"✅ Event ID contains webhook ID: {event_id}")
-                    # If the event ID contains our webhook ID, accept it
-                    return True
-                    
-            except json.JSONDecodeError:
-                # If we can't parse JSON, continue with signature verification
-                print("⚠️ Could not parse webhook JSON for ID verification")
-            
-            # Parse the signature header - should be in format 'ts=timestamp;h=hash' or 'ts=timestamp;h1=hash'
+            # Parse the signature header - should be in format 'ts=timestamp;h1=hash'
             signature_parts = {}
-            if ';' in signature_header:
-                for part in signature_header.split(';'):
-                    if '=' in part:
-                        key, value = part.split('=', 1)
-                        signature_parts[key] = value
-                
-                print(f"📝 Parsed signature parts: {signature_parts}")
-            else:
-                # If signature header doesn't match expected format, try as a single token
-                # This is a fallback for non-standard header formats
-                print(f"⚠️ Non-standard signature header format: {signature_header}")
-                
-                # In sandbox, we might accept non-standard formats for testing
-                if sandbox_mode:
-                    print("⚠️ SANDBOX MODE: Accepting non-standard signature format")
-                    return True
-                
-                # Try direct comparison with webhook ID as a last resort
-                if webhook_id and webhook_id in signature_header:
-                    print(f"✅ Webhook ID found in signature header")
-                    return True
-                    
-                return False
+            for part in signature_header.split(';'):
+                if '=' in part:
+                    key, value = part.split('=', 1)
+                    signature_parts[key] = value
             
-            # Get timestamp and signature - check for both 'h' and 'h1' signature formats
+            print(f"📝 Parsed signature parts: {signature_parts}")
+            
+            # Get timestamp and signature
             timestamp = signature_parts.get('ts')
-            signature = signature_parts.get('h')  # Original format
-            
-            if not signature:
-                signature = signature_parts.get('h1')  # New format
-                print(f"📝 Using h1 signature format: {signature}")
+            # Check for h1 first (newest format), then h (older format)
+            signature = signature_parts.get('h1') or signature_parts.get('h')
             
             if not timestamp or not signature:
                 print(f"❌ Missing timestamp or hash in header: {signature_header}")
-                
-                # In sandbox mode, we might bypass this check
-                if sandbox_mode:
-                    print("⚠️ SANDBOX MODE: Bypassing timestamp/hash verification")
-                    return True
-                    
                 return False
             
-            # Create the string to verify
-            # Format: timestamp + payload
+            # Create the string to verify: timestamp + payload
             data_to_verify = f"{timestamp}:{payload_json}"
             print(f"📝 Data to verify (preview): {data_to_verify[:50]}...")
             
-            # Prepare the public key
-            # Paddle v2 API may have a key format like pdl_ntfset_XXXXX_YYYYY
-            try:
-                # For keys in the format pdl_ntfset_01xxxxx_YYYY+ZZZZ==
-                if public_key.startswith('pdl_ntfset_'):
-                    # Split by underscore and take the last part
-                    key_parts = public_key.split('_')
-                    if len(key_parts) > 3:
-                        # The last part is the actual Base64 encoded key
-                        encoded_key = key_parts[-1]
-                        
-                        # Replace problematic characters
-                        encoded_key = encoded_key.replace(' ', '')
-                        encoded_key = encoded_key.replace('-', '+')
-                        encoded_key = encoded_key.replace('_', '/')
-                        
-                        # Add padding if needed
-                        padding = len(encoded_key) % 4
-                        if padding:
-                            encoded_key += '=' * (4 - padding)
-                        
-                        # Decode the key
-                        decoded_key = base64.b64decode(encoded_key)
-                    else:
-                        # If we can't parse it, try the whole key
-                        decoded_key = base64.b64decode(public_key)
+            # Extract the actual key if needed
+            if webhook_secret.startswith('pdl_ntfset_'):
+                # Format: pdl_ntfset_ID_SECRET_KEY
+                parts = webhook_secret.split('_', 3)
+                if len(parts) >= 4:
+                    actual_secret = parts[3]
                 else:
-                    # For regular Base64 encoded keys
-                    # Remove whitespace and newlines
-                    clean_key = public_key.replace(' ', '').replace('\n', '')
-                    decoded_key = base64.b64decode(clean_key)
+                    actual_secret = webhook_secret
+            else:
+                actual_secret = webhook_secret
                 
-                print(f"✅ Successfully prepared public key for signature verification")
-                
-            except Exception as key_error:
-                print(f"⚠️ Error decoding public key: {str(key_error)}")
-                print(f"⚠️ Attempting to use key directly")
-                # Try to use the key as-is
-                decoded_key = public_key.encode('utf-8')
-            
             # Calculate expected signature using HMAC and SHA-256
             expected_signature = hmac.new(
-                decoded_key,
+                actual_secret.encode('utf-8'),
                 data_to_verify.encode('utf-8'),
                 hashlib.sha256
             ).hexdigest()
@@ -480,16 +394,10 @@ class PaddleWebhookView(APIView):
             # Compare signatures using a constant-time comparison
             is_valid = hmac.compare_digest(signature, expected_signature)
             
-            if not is_valid:
-                print(f"❌ Signature verification failed")
-                
-                # In sandbox mode, we might want to allow invalid signatures
-                # ONLY FOR TESTING PURPOSES
-                if sandbox_mode:
-                    print("⚠️ SANDBOX MODE: Accepting invalid signature for testing")
-                    return True
+            if is_valid:
+                print("✅ Signature verification successful")
             else:
-                print(f"✅ Signature verification successful")
+                print("❌ Signature verification failed")
             
             return is_valid
             
@@ -497,15 +405,8 @@ class PaddleWebhookView(APIView):
             print(f"❌ Error verifying webhook signature: {str(e)}")
             import traceback
             traceback.print_exc()
-            
-            # In sandbox, we might bypass verification after an error
-            # ONLY FOR TESTING PURPOSES
-            if sandbox_mode:
-                print("⚠️ SANDBOX MODE: Bypassing signature verification after error")
-                return True
-                
             return False
-            
+    
     def _handle_subscription_created(self, event_data):
         """Handle subscription.created webhook"""
         try:
