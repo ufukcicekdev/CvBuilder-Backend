@@ -289,6 +289,12 @@ class PaddleWebhookView(APIView):
                     return self._handle_payment_succeeded(event_data)
                 elif event_type == 'subscription.payment.failed':
                     return self._handle_payment_failed(event_data)
+                elif event_type == 'transaction.paid' or event_type == 'transaction.created':
+                    # Treat transaction.paid similar to payment.succeeded
+                    return self._handle_transaction_paid(event_data)
+                elif event_type == 'transaction.updated':
+                    # Handle transaction updates
+                    return self._handle_transaction_updated(event_data)
                 else:
                     # Log unhandled event type
                     print(f"⚠️ Unhandled Paddle webhook event type: {event_type}")
@@ -566,7 +572,8 @@ class PaddleWebhookView(APIView):
                     defaults={
                         'plan': plan,
                         'period': period,
-                        'status': 'pending'
+                        'status': 'pending',
+                        'start_date': timezone.now()  # Always set start_date to prevent NULL constraint error
                     }
                 )
                 
@@ -577,6 +584,7 @@ class PaddleWebhookView(APIView):
                 # Set status based on Paddle subscription status
                 if subscription_status == 'active':
                     user_subscription.status = 'active'
+                    # We already set the start_date in defaults, but update it here too for clarity
                     user_subscription.start_date = timezone.now()
                     
                     # Set the end date based on the period and current billing period
@@ -821,6 +829,116 @@ class PaddleWebhookView(APIView):
             
         except Exception as e:
             print(f"Error handling payment.failed: {str(e)}")
+            return Response(
+                {"status": "error", "detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def _handle_transaction_paid(self, event_data):
+        """Handle transaction.paid webhook"""
+        try:
+            # Get the transaction data
+            transaction = event_data.get('transaction', {})
+            subscription = event_data.get('subscription', {})
+            
+            subscription_id = subscription.get('id')
+            transaction_id = transaction.get('id')
+            
+            if not subscription_id or not transaction_id:
+                return Response(
+                    {"status": "error", "detail": "Missing required fields"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Find the subscription in our database
+            try:
+                user_subscription = UserSubscription.objects.get(paddle_subscription_id=subscription_id)
+            except UserSubscription.DoesNotExist:
+                return Response(
+                    {"status": "error", "detail": "Subscription not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Create a payment record
+            amount = transaction.get('amount', 0)
+            currency = transaction.get('currency_code', 'USD')
+            
+            payment = SubscriptionPaymentHistory.objects.create(
+                subscription=user_subscription,
+                payment_id=f"paddle_payment_{transaction_id}",
+                amount=amount,
+                currency=currency,
+                status='success',
+                paddle_payment_id=transaction_id,
+                paddle_checkout_id=transaction.get('checkout', {}).get('id')
+            )
+            
+            # Update subscription end date
+            current_period_end = subscription.get('current_billing_period', {}).get('ends_at')
+            if current_period_end:
+                user_subscription.end_date = current_period_end
+            else:
+                # Fallback if no period end date
+                if user_subscription.period == 'monthly':
+                    user_subscription.end_date = timezone.now() + timedelta(days=30)
+                else:
+                    user_subscription.end_date = timezone.now() + timedelta(days=365)
+            
+            # Ensure subscription is marked as active
+            user_subscription.status = 'active'
+            user_subscription.save()
+            
+            return Response({"status": "success"}, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"Error handling transaction.paid: {str(e)}")
+            return Response(
+                {"status": "error", "detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def _handle_transaction_updated(self, event_data):
+        """Handle transaction.updated webhook"""
+        try:
+            # Get the transaction data
+            transaction = event_data.get('transaction', {})
+            subscription = event_data.get('subscription', {})
+            
+            subscription_id = subscription.get('id')
+            transaction_id = transaction.get('id')
+            
+            if not subscription_id or not transaction_id:
+                return Response(
+                    {"status": "error", "detail": "Missing required fields"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Find the subscription in our database
+            try:
+                user_subscription = UserSubscription.objects.get(paddle_subscription_id=subscription_id)
+            except UserSubscription.DoesNotExist:
+                return Response(
+                    {"status": "error", "detail": "Subscription not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Update the subscription status
+            if transaction.get('status') == 'paid':
+                user_subscription.status = 'active'
+            elif transaction.get('status') == 'past_due':
+                user_subscription.status = 'past_due'
+            
+            # Update end date if present
+            current_period_end = transaction.get('current_billing_period', {}).get('ends_at')
+            if current_period_end:
+                user_subscription.end_date = current_period_end
+            
+            user_subscription.save()
+            
+            return Response({"status": "success"}, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"Error handling transaction.updated: {str(e)}")
             return Response(
                 {"status": "error", "detail": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
