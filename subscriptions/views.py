@@ -236,71 +236,145 @@ class PaddleWebhookView(APIView):
     
     def post(self, request, *args, **kwargs):
         """Handle Paddle Billing webhook events"""
-        # Store the raw request body for signature verification
-        raw_body = request.body.decode('utf-8')
-        
-        # Verify the webhook signature
-        if not verify_webhook_signature(request.headers, raw_body):
-            return Response(
-                {"detail": "Invalid signature"},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-        
-        # Get the event type and data
         try:
-            # Parse the webhook payload
-            webhook_data = json.loads(raw_body)
-            event_type = webhook_data.get('event_type')
-            event_data = webhook_data.get('data', {})
+            # Store the raw request body for signature verification
+            raw_body = request.body.decode('utf-8')
             
-            print(f"Received Paddle webhook: {event_type}")
+            # Log request headers and body for debugging
+            print("Webhook Headers:")
+            for key, value in request.headers.items():
+                print(f"  {key}: {value}")
             
-            # Handle different types of webhook events
-            if event_type == 'subscription.created':
-                return self._handle_subscription_created(event_data)
-            elif event_type == 'subscription.updated':
-                return self._handle_subscription_updated(event_data)
-            elif event_type == 'subscription.canceled':
-                return self._handle_subscription_canceled(event_data)
-            elif event_type == 'subscription.payment.succeeded':
-                return self._handle_payment_succeeded(event_data)
-            elif event_type == 'subscription.payment.failed':
-                return self._handle_payment_failed(event_data)
-            else:
-                # Log unhandled event type
-                print(f"Unhandled Paddle webhook event type: {event_type}")
-                # Default response for unhandled events
-                return Response({"status": "ignored"}, status=status.HTTP_200_OK)
+            print(f"Webhook Body: {raw_body[:500]}...")
+            
+            # Verify the webhook signature
+            if not verify_webhook_signature(request.headers, raw_body):
+                print("Webhook signature verification failed")
+                return Response(
+                    {"detail": "Invalid signature"},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            print("Webhook signature verification passed")
+            
+            # Get the event type and data
+            try:
+                # Parse the webhook payload
+                webhook_data = json.loads(raw_body)
+                event_type = webhook_data.get('event_type')
+                event_data = webhook_data.get('data', {})
+                
+                print(f"Received Paddle webhook: {event_type}")
+                
+                # Handle different types of webhook events
+                if event_type == 'subscription.created':
+                    return self._handle_subscription_created(event_data)
+                elif event_type == 'subscription.updated':
+                    return self._handle_subscription_updated(event_data)
+                elif event_type == 'subscription.canceled':
+                    return self._handle_subscription_canceled(event_data)
+                elif event_type == 'subscription.payment.succeeded':
+                    return self._handle_payment_succeeded(event_data)
+                elif event_type == 'subscription.payment.failed':
+                    return self._handle_payment_failed(event_data)
+                else:
+                    # Log unhandled event type
+                    print(f"Unhandled Paddle webhook event type: {event_type}")
+                    # Default response for unhandled events
+                    return Response({"status": "acknowledged"}, status=status.HTTP_200_OK)
+                    
+            except json.JSONDecodeError as e:
+                print(f"Error decoding webhook JSON: {str(e)}")
+                return Response(
+                    {"status": "error", "detail": "Invalid JSON payload"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            except Exception as e:
+                print(f"Error processing Paddle webhook: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                return Response(
+                    {"status": "error", "detail": str(e)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
                 
         except Exception as e:
-            print(f"Error processing Paddle webhook: {str(e)}")
+            print(f"Unexpected error in webhook handler: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response(
-                {"status": "error", "detail": str(e)},
+                {"status": "error", "detail": "Server error"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
     def _handle_subscription_created(self, event_data):
         """Handle subscription.created webhook"""
         try:
-            # Get the subscription data
-            subscription = event_data.get('subscription', {})
-            subscription_id = subscription.get('id')
-            status = subscription.get('status')
+            # In Paddle v2 API, the subscription data is the event_data itself
+            # not inside a nested 'subscription' object
+            subscription_id = event_data.get('id')
+            status = event_data.get('status')
+            
+            print(f"Processing subscription created: {subscription_id}")
             
             # Get the custom data
             custom_data = {}
             try:
-                custom_data_str = subscription.get('custom_data', '{}')
-                custom_data = json.loads(custom_data_str)
+                custom_data_str = event_data.get('custom_data', '{}')
+                if custom_data_str:
+                    custom_data = json.loads(custom_data_str) if isinstance(custom_data_str, str) else custom_data_str
             except Exception as e:
                 print(f"Error parsing custom_data: {str(e)}")
             
+            # Try to get user_id, plan_id, and period from custom_data
             user_id = custom_data.get('user_id')
             plan_id = custom_data.get('plan_id')
             period = custom_data.get('period')
             
+            # If we don't have user_id from custom_data, try to find by customer_id
+            if not user_id:
+                customer_id = event_data.get('customer_id')
+                if customer_id:
+                    from users.models import User
+                    try:
+                        user = User.objects.get(paddle_customer_id=customer_id)
+                        user_id = user.id
+                        print(f"Found user {user_id} using customer_id {customer_id}")
+                    except User.DoesNotExist:
+                        print(f"No user found with paddle_customer_id {customer_id}")
+            
+            # If we still don't have plan_id/period, try to infer from items
+            if not plan_id or not period:
+                items = event_data.get('items', [])
+                if items and len(items) > 0:
+                    item = items[0]
+                    
+                    # Try to get product info
+                    product = item.get('product', {})
+                    product_name = product.get('name', '').lower()
+                    
+                    # Try to infer plan_id from product name
+                    if not plan_id:
+                        if 'premium' in product_name:
+                            plan_id = 'premium'
+                        elif 'jobseeker' in product_name:
+                            plan_id = 'jobseeker'
+                    
+                    # Try to infer period from billing cycle
+                    if not period:
+                        price = item.get('price', {})
+                        billing_cycle = price.get('billing_cycle', {})
+                        interval = billing_cycle.get('interval', '')
+                        
+                        if interval == 'month':
+                            period = 'monthly'
+                        elif interval == 'year':
+                            period = 'yearly'
+                        
+                    print(f"Inferred plan_id: {plan_id}, period: {period}")
+            
             if not user_id or not plan_id or not period:
-                print("Missing required custom data fields")
+                print(f"Missing required data: user_id={user_id}, plan_id={plan_id}, period={period}")
                 return Response(
                     {"status": "error", "detail": "Missing required custom data"},
                     status=status.HTTP_400_BAD_REQUEST
@@ -328,30 +402,44 @@ class PaddleWebhookView(APIView):
                 
                 # Update the subscription with Paddle details
                 user_subscription.paddle_subscription_id = subscription_id
-                user_subscription.paddle_customer_id = subscription.get('customer_id')
+                user_subscription.paddle_customer_id = event_data.get('customer_id')
                 
                 # Set status based on Paddle subscription status
                 if status == 'active':
                     user_subscription.status = 'active'
-                    user_subscription.start_date = timezone.now()
                     
-                    # Set the end date based on the period and current billing period
-                    current_period_end = subscription.get('current_billing_period', {}).get('ends_at')
-                    if current_period_end:
-                        user_subscription.end_date = current_period_end
+                    # Set start date from Paddle data or current time
+                    started_at = event_data.get('started_at')
+                    if started_at:
+                        user_subscription.start_date = started_at
                     else:
-                        # Fallback if no period end date is provided
-                        if period == 'monthly':
-                            user_subscription.end_date = timezone.now() + timedelta(days=30)
+                        user_subscription.start_date = timezone.now()
+                    
+                    # Set the end date based on the current billing period or next bill date
+                    current_period = event_data.get('current_billing_period', {})
+                    if current_period and current_period.get('ends_at'):
+                        user_subscription.end_date = current_period.get('ends_at')
+                    else:
+                        # Try next_billed_at as fallback
+                        next_billed_at = event_data.get('next_billed_at')
+                        if next_billed_at:
+                            user_subscription.end_date = next_billed_at
                         else:
-                            user_subscription.end_date = timezone.now() + timedelta(days=365)
+                            # Last resort fallback
+                            if period == 'monthly':
+                                user_subscription.end_date = timezone.now() + timedelta(days=30)
+                            else:
+                                user_subscription.end_date = timezone.now() + timedelta(days=365)
                 
                 user_subscription.save()
+                print(f"Successfully updated subscription for user {user_id}")
                 
                 return Response({"status": "success"}, status=status.HTTP_200_OK)
                 
             except Exception as e:
                 print(f"Error updating subscription: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 return Response(
                     {"status": "error", "detail": str(e)},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -359,6 +447,8 @@ class PaddleWebhookView(APIView):
                 
         except Exception as e:
             print(f"Error handling subscription.created: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response(
                 {"status": "error", "detail": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -367,10 +457,11 @@ class PaddleWebhookView(APIView):
     def _handle_subscription_updated(self, event_data):
         """Handle subscription.updated webhook"""
         try:
-            # Get the subscription data
-            subscription = event_data.get('subscription', {})
-            subscription_id = subscription.get('id')
-            status = subscription.get('status')
+            # In Paddle v2 API, subscription data is directly in event_data
+            subscription_id = event_data.get('id')
+            status = event_data.get('status')
+            
+            print(f"Processing subscription updated: {subscription_id}")
             
             if not subscription_id:
                 return Response(
@@ -398,17 +489,24 @@ class PaddleWebhookView(APIView):
                 elif status == 'past_due':
                     user_subscription.status = 'past_due'
             
-            # Update end date if present
-            current_period_end = subscription.get('current_billing_period', {}).get('ends_at')
-            if current_period_end:
-                user_subscription.end_date = current_period_end
+            # Update end date if present in current_billing_period
+            current_period = event_data.get('current_billing_period', {})
+            if current_period and current_period.get('ends_at'):
+                user_subscription.end_date = current_period.get('ends_at')
+            
+            # Alternatively, use next_billed_at
+            elif event_data.get('next_billed_at'):
+                user_subscription.end_date = event_data.get('next_billed_at')
             
             user_subscription.save()
+            print(f"Successfully updated subscription {subscription_id}")
             
             return Response({"status": "success"}, status=status.HTTP_200_OK)
             
         except Exception as e:
             print(f"Error handling subscription.updated: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response(
                 {"status": "error", "detail": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -417,9 +515,10 @@ class PaddleWebhookView(APIView):
     def _handle_subscription_canceled(self, event_data):
         """Handle subscription.canceled webhook"""
         try:
-            # Get the subscription ID
-            subscription = event_data.get('subscription', {})
-            subscription_id = subscription.get('id')
+            # In Paddle v2 API, subscription data is directly in event_data
+            subscription_id = event_data.get('id')
+            
+            print(f"Processing subscription canceled: {subscription_id}")
             
             if not subscription_id:
                 return Response(
@@ -438,12 +537,20 @@ class PaddleWebhookView(APIView):
             
             # Update the subscription status
             user_subscription.status = 'canceled'
+            
+            # If canceled_at is provided, record it
+            if event_data.get('canceled_at'):
+                user_subscription.canceled_at = event_data.get('canceled_at')
+            
             user_subscription.save()
+            print(f"Successfully marked subscription {subscription_id} as canceled")
             
             return Response({"status": "success"}, status=status.HTTP_200_OK)
             
         except Exception as e:
             print(f"Error handling subscription.canceled: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response(
                 {"status": "error", "detail": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -452,16 +559,23 @@ class PaddleWebhookView(APIView):
     def _handle_payment_succeeded(self, event_data):
         """Handle subscription.payment.succeeded webhook"""
         try:
-            # Get the transaction data
-            transaction = event_data.get('transaction', {})
-            subscription = event_data.get('subscription', {})
+            # For payment events, we need to find the transaction and subscription data
+            # In Paddle v2, this structure might differ, so we need to be flexible
+            transaction_id = event_data.get('transaction_id')
+            subscription_id = event_data.get('id')  # In some formats, payment events still include the subscription
             
-            subscription_id = subscription.get('id')
-            transaction_id = transaction.get('id')
+            print(f"Processing payment succeeded for subscription: {subscription_id}, transaction: {transaction_id}")
+            
+            # Try alternative ways to get the data if not directly available
+            if not transaction_id:
+                # Check if there's a transaction object or array
+                transactions = event_data.get('transactions', [])
+                if transactions and len(transactions) > 0:
+                    transaction_id = transactions[0].get('id')
             
             if not subscription_id or not transaction_id:
                 return Response(
-                    {"status": "error", "detail": "Missing required fields"},
+                    {"status": "error", "detail": "Missing required fields (subscription_id or transaction_id)"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -474,9 +588,17 @@ class PaddleWebhookView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Create a payment record
-            amount = transaction.get('amount', 0)
-            currency = transaction.get('currency_code', 'USD')
+            # Create a payment record - handle different formats
+            amount = event_data.get('total_amount', 0)
+            currency = event_data.get('currency_code', 'USD')
+            
+            # Try to get from items if available
+            if not amount and 'items' in event_data and len(event_data['items']) > 0:
+                item = event_data['items'][0]
+                price = item.get('price', {})
+                if price and 'unit_price' in price:
+                    amount = price['unit_price'].get('amount', 0)
+                    currency = price['unit_price'].get('currency_code', currency)
             
             payment = SubscriptionPaymentHistory.objects.create(
                 subscription=user_subscription,
@@ -485,13 +607,15 @@ class PaddleWebhookView(APIView):
                 currency=currency,
                 status='success',
                 paddle_payment_id=transaction_id,
-                paddle_checkout_id=transaction.get('checkout', {}).get('id')
+                paddle_checkout_id=event_data.get('checkout_id')
             )
             
             # Update subscription end date
-            current_period_end = subscription.get('current_billing_period', {}).get('ends_at')
-            if current_period_end:
-                user_subscription.end_date = current_period_end
+            current_period = event_data.get('current_billing_period', {})
+            if current_period and current_period.get('ends_at'):
+                user_subscription.end_date = current_period.get('ends_at')
+            elif event_data.get('next_billed_at'):
+                user_subscription.end_date = event_data.get('next_billed_at')
             else:
                 # Fallback if no period end date
                 if user_subscription.period == 'monthly':
@@ -503,10 +627,13 @@ class PaddleWebhookView(APIView):
             user_subscription.status = 'active'
             user_subscription.save()
             
+            print(f"Successfully recorded payment for subscription {subscription_id}")
             return Response({"status": "success"}, status=status.HTTP_200_OK)
             
         except Exception as e:
             print(f"Error handling payment.succeeded: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response(
                 {"status": "error", "detail": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -515,16 +642,21 @@ class PaddleWebhookView(APIView):
     def _handle_payment_failed(self, event_data):
         """Handle subscription.payment.failed webhook"""
         try:
-            # Get the transaction data
-            transaction = event_data.get('transaction', {})
-            subscription = event_data.get('subscription', {})
+            # For payment events in Paddle v2 API
+            transaction_id = event_data.get('transaction_id')
+            subscription_id = event_data.get('id')  
             
-            subscription_id = subscription.get('id')
-            transaction_id = transaction.get('id')
+            print(f"Processing payment failed for subscription: {subscription_id}, transaction: {transaction_id}")
+            
+            # Try alternative ways to get transaction ID if not directly available
+            if not transaction_id:
+                transactions = event_data.get('transactions', [])
+                if transactions and len(transactions) > 0:
+                    transaction_id = transactions[0].get('id')
             
             if not subscription_id or not transaction_id:
                 return Response(
-                    {"status": "error", "detail": "Missing required fields"},
+                    {"status": "error", "detail": "Missing required fields (subscription_id or transaction_id)"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -537,9 +669,17 @@ class PaddleWebhookView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Create a failed payment record
-            amount = transaction.get('amount', 0)
-            currency = transaction.get('currency_code', 'USD')
+            # Create a failed payment record - handle different formats
+            amount = event_data.get('total_amount', 0)
+            currency = event_data.get('currency_code', 'USD')
+            
+            # Try to get from items if available
+            if not amount and 'items' in event_data and len(event_data['items']) > 0:
+                item = event_data['items'][0]
+                price = item.get('price', {})
+                if price and 'unit_price' in price:
+                    amount = price['unit_price'].get('amount', 0)
+                    currency = price['unit_price'].get('currency_code', currency)
             
             payment = SubscriptionPaymentHistory.objects.create(
                 subscription=user_subscription,
@@ -548,16 +688,20 @@ class PaddleWebhookView(APIView):
                 currency=currency,
                 status='failed',
                 paddle_payment_id=transaction_id,
-                paddle_checkout_id=transaction.get('checkout', {}).get('id')
+                paddle_checkout_id=event_data.get('checkout_id')
             )
             
-            # Don't update the subscription status yet, Paddle will try again
-            # If needed, you could update to 'past_due' or similar status
+            # Consider updating subscription status to past_due depending on your business logic
+            # user_subscription.status = 'past_due'
+            # user_subscription.save()
             
+            print(f"Recorded failed payment for subscription {subscription_id}")
             return Response({"status": "success"}, status=status.HTTP_200_OK)
             
         except Exception as e:
             print(f"Error handling payment.failed: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response(
                 {"status": "error", "detail": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
