@@ -384,17 +384,19 @@ FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 SITE_URL = os.getenv('SITE_URL', 'http://localhost:8000')
 
 # Paddle Billing Settings
-PADDLE_VENDOR_ID = os.environ.get('PADDLE_VENDOR_ID', 'your_vendor_id')
-PADDLE_API_KEY = os.environ.get('PADDLE_API_KEY', 'your_api_key')  # Paddle Billing API key
-PADDLE_PUBLIC_KEY = os.environ.get('PADDLE_PUBLIC_KEY', 'your_public_key')  # For webhook verification
-PADDLE_SANDBOX = os.environ.get('PADDLE_SANDBOX', 'True') == 'True'
-PADDLE_WEBHOOK_ID = os.environ.get('PADDLE_WEBHOOK_ID', '')  # Webhook ID for verification
+PADDLE_VENDOR_ID = os.getenv('PADDLE_VENDOR_ID', 'your_vendor_id')
+PADDLE_API_KEY = os.getenv('PADDLE_API_KEY', 'your_api_key')  # Paddle Billing API key
+PADDLE_PUBLIC_KEY = os.getenv('PADDLE_PUBLIC_KEY', 'your_public_key')  # For webhook verification
+PADDLE_WEBHOOK_SECRET = os.getenv('PADDLE_WEBHOOK_SECRET', '')  # Webhook secret for verification
+PADDLE_SANDBOX = os.getenv('PADDLE_SANDBOX', 'True') == 'True'
+PADDLE_WEBHOOK_ID = os.getenv('PADDLE_WEBHOOK_ID', '')  # Webhook ID for verification
 
 # Paddle Settings dict for easy access
 PADDLE_SETTINGS = {
     'vendor_id': PADDLE_VENDOR_ID, 
     'api_key': PADDLE_API_KEY,
     'public_key': PADDLE_PUBLIC_KEY,
+    'webhook_secret': PADDLE_WEBHOOK_SECRET,
     'sandbox': PADDLE_SANDBOX,
     'webhook_id': PADDLE_WEBHOOK_ID
 }
