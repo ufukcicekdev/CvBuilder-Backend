@@ -116,7 +116,11 @@ class UserSubscriptionViewSet(viewsets.ModelViewSet):
                         user=request.user,
                         plan=plan,
                         period=period,
-                        status='pending'
+                        status='pending',
+                        payment_provider='paddle',      # Set payment provider
+                        is_active=True,                # Set is_active to True
+                        cancel_at_period_end=False,    # Set cancel_at_period_end to False
+                        start_date=timezone.now()      # Set start_date to prevent NULL constraint
                     )
                 
                 # Generate a Paddle checkout URL
@@ -429,121 +433,139 @@ class PaddleWebhookView(APIView):
         try:
             # Get the subscription data
             subscription = event_data.get('subscription', {})
+            if not subscription:
+                # In some Paddle webhook formats, the subscription is directly in the event_data
+                subscription = event_data
+                
             subscription_id = subscription.get('id')
             subscription_status = subscription.get('status')
             
             # Log the data for debugging
             print(f"Processing subscription.created - ID: {subscription_id}, Status: {subscription_status}")
-            print(f"Subscription data: {subscription}")
             
-            # Try to get customer information
+            # Get customer_id
             customer_id = subscription.get('customer_id')
-            customer_email = None
-            
-            # Try to get customer email from the event data
-            # There are different possible paths in Paddle's webhook structure
-            if 'customer' in event_data:
-                customer = event_data.get('customer', {})
-                customer_email = customer.get('email')
-            elif 'customer' in subscription:
-                customer = subscription.get('customer', {})
-                customer_email = customer.get('email')
-            
-            # If we found an email, try to find the user
-            user_id = None
-            if customer_email:
-                print(f"Found customer email: {customer_email}")
-                # Get the user model
-                from django.contrib.auth import get_user_model
-                User = get_user_model()
+            if not customer_id:
+                print("❌ No customer_id found in the webhook")
+                return Response(
+                    {"status": "error", "detail": "Missing customer_id in webhook data"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
                 
-                try:
-                    # Try to find the user by email
-                    user = User.objects.get(email=customer_email)
-                    user_id = user.id
-                    print(f"Found user by email: {user_id}")
-                except User.DoesNotExist:
-                    print(f"No user found with email: {customer_email}")
+            print(f"Found customer_id: {customer_id}")
             
-            # Try to get product/price information to determine the plan
+            # Try to find user by customer_id first (if we've stored it before)
+            user_id = None
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            
+            # Option 1: Try to find user by paddle_customer_id
+            try:
+                existing_subscription = UserSubscription.objects.filter(paddle_customer_id=customer_id).first()
+                if existing_subscription:
+                    user_id = existing_subscription.user_id
+                    print(f"Found existing user by customer_id: {user_id}")
+            except Exception as e:
+                print(f"Error finding user by customer_id: {str(e)}")
+            
+            # Option 2: If we can't find by customer_id, try to get customer email
+            if not user_id:
+                # Attempt to get customer details from Paddle
+                # This would require a Paddle API call, which we might implement later
+                # For now, we'll rely on sandbox mode fallback if needed
+                
+                if settings.PADDLE_SANDBOX:
+                    print("⚠️ No user found by customer_id. Using first user as fallback in sandbox mode")
+                    first_user = User.objects.first()
+                    if first_user:
+                        user_id = first_user.id
+                    else:
+                        return Response(
+                            {"status": "error", "detail": "No users found in the system"},
+                            status=status.HTTP_404_NOT_FOUND
+                        )
+                else:
+                    return Response(
+                        {"status": "error", "detail": "Could not identify user for this subscription"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # Get plan information from the items array
             plan_id = None
             period = None
             
-            # Check if there are items in the subscription
             items = subscription.get('items', [])
             if items and len(items) > 0:
                 first_item = items[0]
+                
+                # Get product information
+                product = first_item.get('product', {})
+                product_id = product.get('id') if product else None
+                
+                # Get price information
                 price = first_item.get('price', {})
+                price_id = price.get('id') if price else None
                 
-                # Extract price ID which can help identify the plan
-                price_id = price.get('id')
-                
-                # Try to find the corresponding plan in our database
-                if price_id:
-                    print(f"Found price ID: {price_id}")
+                # Try to get billing period information
+                billing_cycle = price.get('billing_cycle', {}) if price else {}
+                if not billing_cycle:
+                    # Try to get from subscription level
+                    billing_cycle = subscription.get('billing_cycle', {})
                     
-                    # Try to find plan based on the price ID
-                    # This assumes you have a way to map Paddle price IDs to your plans
-                    # For example, you might store price IDs in the plan metadata
-                    try:
-                        plan = get_subscription_plan_by_price_id(price_id)
-                        if plan:
-                            plan_id = plan.plan_id
-                    except:
-                        # Fallback if the utility function doesn't exist
-                        try:
-                            from .models import SubscriptionPlan
-                            for sp in SubscriptionPlan.objects.filter(is_active=True):
-                                # This is a basic example - you'd need to implement your own
-                                # mapping between Paddle price IDs and your plans
-                                # For example, you might store price IDs in the plan metadata
-                                if hasattr(sp, 'paddle_price_id') and sp.paddle_price_id == price_id:
-                                    plan_id = sp.plan_id
-                                    break
-                        except Exception as e:
-                            print(f"Error finding plan by price ID: {str(e)}")
-                
-                # Try to determine the billing period
-                billing_cycle = price.get('billing_cycle', {})
                 interval = billing_cycle.get('interval')
                 
+                print(f"Found product_id: {product_id}, price_id: {price_id}, interval: {interval}")
+                
+                # Determine period based on interval
                 if interval == 'month':
                     period = 'monthly'
                 elif interval == 'year':
                     period = 'yearly'
                 else:
-                    # Default to monthly if we can't determine
-                    period = 'monthly'
-            
-            # If we still don't have user_id, plan_id, or period
-            # Check if we're in sandbox mode and use fallbacks
-            if settings.PADDLE_SANDBOX:
-                if not user_id:
-                    print("⚠️ No user_id found. Using first user as fallback in sandbox mode")
-                    from django.contrib.auth import get_user_model
-                    User = get_user_model()
-                    first_user = User.objects.first()
-                    if first_user:
-                        user_id = first_user.id
+                    period = 'monthly'  # Default to monthly
                 
-                if not plan_id:
+                # Try to find plan by price_id 
+                if price_id:
+                    try:
+                        plan = get_subscription_plan_by_price_id(price_id)
+                        if plan:
+                            plan_id = plan.plan_id
+                            print(f"Found plan by price_id: {plan_id}")
+                    except Exception as e:
+                        print(f"Error finding plan by price_id: {str(e)}")
+                
+                # If not found by price_id, try by product_id
+                if not plan_id and product_id:
+                    try:
+                        from .models import SubscriptionPlan
+                        plan = SubscriptionPlan.objects.filter(paddle_product_id=product_id).first()
+                        if plan:
+                            plan_id = plan.plan_id
+                            print(f"Found plan by product_id: {plan_id}")
+                    except Exception as e:
+                        print(f"Error finding plan by product_id: {str(e)}")
+            
+            # If still no plan_id, use fallback in sandbox mode
+            if not plan_id:
+                if settings.PADDLE_SANDBOX:
                     print("⚠️ No plan_id found. Using first active plan as fallback in sandbox mode")
                     from .models import SubscriptionPlan
                     first_plan = SubscriptionPlan.objects.filter(is_active=True).first()
                     if first_plan:
                         plan_id = first_plan.plan_id
-                
-                if not period:
-                    print("⚠️ No period found. Using 'monthly' as fallback in sandbox mode")
-                    period = 'monthly'
+                    else:
+                        return Response(
+                            {"status": "error", "detail": "No active plans found"},
+                            status=status.HTTP_404_NOT_FOUND
+                        )
+                else:
+                    return Response(
+                        {"status": "error", "detail": "Could not identify plan for this subscription"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
             
-            # At this point, we need to have all the necessary information
-            if not user_id or not plan_id or not period:
-                print(f"Missing required fields: user_id={user_id}, plan_id={plan_id}, period={period}")
-                return Response(
-                    {"status": "error", "detail": "Missing required information to create subscription"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            # At this point, we should have user_id, plan_id, and period
+            print(f"Final values: user_id={user_id}, plan_id={plan_id}, period={period}")
             
             # Get the plan
             try:
@@ -551,18 +573,10 @@ class PaddleWebhookView(APIView):
                 plan = SubscriptionPlan.objects.get(plan_id=plan_id)
             except SubscriptionPlan.DoesNotExist:
                 print(f"Plan not found with ID: {plan_id}")
-                if settings.PADDLE_SANDBOX:
-                    plan = SubscriptionPlan.objects.filter(is_active=True).first()
-                    if not plan:
-                        return Response(
-                            {"status": "error", "detail": "No active plans found"},
-                            status=status.HTTP_404_NOT_FOUND
-                        )
-                else:
-                    return Response(
-                        {"status": "error", "detail": "Plan not found"},
-                        status=status.HTTP_404_NOT_FOUND
-                    )
+                return Response(
+                    {"status": "error", "detail": "Plan not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
             
             # Get or create the subscription
             try:
@@ -573,7 +587,10 @@ class PaddleWebhookView(APIView):
                         'plan': plan,
                         'period': period,
                         'status': 'pending',
-                        'start_date': timezone.now()  # Always set start_date to prevent NULL constraint error
+                        'start_date': timezone.now(),  # Will be updated with actual data if available
+                        'payment_provider': 'paddle',
+                        'is_active': True,
+                        'cancel_at_period_end': False
                     }
                 )
                 
@@ -581,30 +598,38 @@ class PaddleWebhookView(APIView):
                 user_subscription.paddle_subscription_id = subscription_id
                 user_subscription.paddle_customer_id = customer_id
                 
+                # Check for a transaction ID
+                transaction_id = subscription.get('transaction_id')
+                if transaction_id:
+                    print(f"Found transaction_id: {transaction_id}")
+                
                 # Set status based on Paddle subscription status
                 if subscription_status == 'active':
                     user_subscription.status = 'active'
-                    # We already set the start_date in defaults, but update it here too for clarity
-                    user_subscription.start_date = timezone.now()
                     
-                    # Set the end date based on the period and current billing period
-                    # Try different possible formats for the end date
-                    current_period_end = None
+                    # Get start date
+                    start_date = None
+                    if 'started_at' in subscription:
+                        start_date = subscription.get('started_at')
+                    elif 'first_billed_at' in subscription:
+                        start_date = subscription.get('first_billed_at')
+                    elif 'current_billing_period' in subscription:
+                        start_date = subscription.get('current_billing_period', {}).get('starts_at')
                     
-                    # Format 1: current_billing_period.ends_at
+                    if start_date:
+                        user_subscription.start_date = start_date
+                        print(f"Set start_date to: {start_date}")
+                    
+                    # Get end date
+                    end_date = None
                     if 'current_billing_period' in subscription:
-                        current_period_end = subscription.get('current_billing_period', {}).get('ends_at')
+                        end_date = subscription.get('current_billing_period', {}).get('ends_at')
+                    elif 'next_billed_at' in subscription:
+                        end_date = subscription.get('next_billed_at')
                     
-                    # Format 2: next_billed_at
-                    if not current_period_end and 'next_billed_at' in subscription:
-                        current_period_end = subscription.get('next_billed_at')
-                    
-                    # Format 3: current_period_end directly
-                    if not current_period_end and 'current_period_end' in subscription:
-                        current_period_end = subscription.get('current_period_end')
-                    
-                    if current_period_end:
-                        user_subscription.end_date = current_period_end
+                    if end_date:
+                        user_subscription.end_date = end_date
+                        print(f"Set end_date to: {end_date}")
                     else:
                         # Fallback if no period end date is provided
                         if period == 'monthly':
@@ -613,6 +638,34 @@ class PaddleWebhookView(APIView):
                             user_subscription.end_date = timezone.now() + timedelta(days=365)
                 
                 user_subscription.save()
+                
+                # If we have a transaction ID, create a payment record
+                if transaction_id and subscription_status == 'active':
+                    try:
+                        # Try to get amount from the webhook
+                        amount = "0"
+                        currency = "USD"
+                        
+                        if items and len(items) > 0:
+                            first_item = items[0]
+                            price = first_item.get('price', {})
+                            unit_price = price.get('unit_price', {})
+                            amount = unit_price.get('amount', "0")
+                            currency = unit_price.get('currency_code', "USD")
+                        
+                        # Create payment record
+                        from .models import SubscriptionPaymentHistory
+                        payment = SubscriptionPaymentHistory.objects.create(
+                            subscription=user_subscription,
+                            payment_id=f"paddle_payment_{transaction_id}",
+                            amount=amount,
+                            currency=currency,
+                            status='success',
+                            paddle_payment_id=transaction_id
+                        )
+                        print(f"Created payment record for transaction: {transaction_id}")
+                    except Exception as e:
+                        print(f"Error creating payment record: {str(e)}")
                 
                 print(f"✅ Successfully processed subscription.created - User ID: {user_id}, Plan: {plan.name}")
                 return Response({"status": "success"}, status=status.HTTP_200_OK)
