@@ -451,4 +451,41 @@ def update_payment_method(paddle_subscription_id, return_url=None):
         print(f"Exception generating payment method update URL: {str(e)}")
         
         # Fallback URL for development
-        return f"{options['checkout_url']}/subscription/update?subscription_id={paddle_subscription_id}" 
+        return f"{options['checkout_url']}/subscription/update?subscription_id={paddle_subscription_id}"
+
+
+def get_subscription_plan_by_price_id(price_id):
+    """
+    Get a subscription plan based on a Paddle price ID
+    
+    Args:
+        price_id: Paddle price ID to look up
+    
+    Returns:
+        SubscriptionPlan instance or None if not found
+    """
+    try:
+        # Get the model
+        from .models import SubscriptionPlan
+        
+        # Build a lookup of all active plans to their Paddle price IDs
+        price_map = {}
+        
+        # Generate price maps for all active plans
+        for plan in SubscriptionPlan.objects.filter(is_active=True):
+            # Try for monthly
+            monthly_price_id = get_subscription_plan(plan, 'monthly')
+            if monthly_price_id:
+                price_map[monthly_price_id] = plan
+                
+            # Try for yearly
+            yearly_price_id = get_subscription_plan(plan, 'yearly')
+            if yearly_price_id:
+                price_map[yearly_price_id] = plan
+        
+        # Look up the plan by price ID
+        return price_map.get(price_id)
+    
+    except Exception as e:
+        print(f"Error finding plan by price ID: {str(e)}")
+        return None 
