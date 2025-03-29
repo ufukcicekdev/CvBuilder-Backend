@@ -335,6 +335,9 @@ class PaddleWebhookView(APIView):
         # Check if we're in sandbox mode
         sandbox_mode = getattr(settings, 'PADDLE_SANDBOX', False)
         
+        # Print full signature header for debugging
+        print(f"📝 Received signature header: {signature_header}")
+        
         # Check if the Paddle-Signature is just the webhook ID
         # This is a simple authentication mode where Paddle just sends the notification ID
         if signature_header == webhook_id:
@@ -375,13 +378,15 @@ class PaddleWebhookView(APIView):
                 # If we can't parse JSON, continue with signature verification
                 print("⚠️ Could not parse webhook JSON for ID verification")
             
-            # Parse the signature header - should be in format 'ts=timestamp;h=hash'
+            # Parse the signature header - should be in format 'ts=timestamp;h=hash' or 'ts=timestamp;h1=hash'
             signature_parts = {}
-            if ';' in signature_header and '=' in signature_header:
+            if ';' in signature_header:
                 for part in signature_header.split(';'):
                     if '=' in part:
                         key, value = part.split('=', 1)
                         signature_parts[key] = value
+                
+                print(f"📝 Parsed signature parts: {signature_parts}")
             else:
                 # If signature header doesn't match expected format, try as a single token
                 # This is a fallback for non-standard header formats
@@ -399,9 +404,13 @@ class PaddleWebhookView(APIView):
                     
                 return False
             
-            # Get timestamp and signature
+            # Get timestamp and signature - check for both 'h' and 'h1' signature formats
             timestamp = signature_parts.get('ts')
-            signature = signature_parts.get('h')
+            signature = signature_parts.get('h')  # Original format
+            
+            if not signature:
+                signature = signature_parts.get('h1')  # New format
+                print(f"📝 Using h1 signature format: {signature}")
             
             if not timestamp or not signature:
                 print(f"❌ Missing timestamp or hash in header: {signature_header}")
@@ -416,6 +425,7 @@ class PaddleWebhookView(APIView):
             # Create the string to verify
             # Format: timestamp + payload
             data_to_verify = f"{timestamp}:{payload_json}"
+            print(f"📝 Data to verify (preview): {data_to_verify[:50]}...")
             
             # Prepare the public key
             # Paddle v2 API may have a key format like pdl_ntfset_XXXXX_YYYYY
@@ -464,13 +474,14 @@ class PaddleWebhookView(APIView):
                 hashlib.sha256
             ).hexdigest()
             
+            print(f"📝 Expected signature: {expected_signature}")
+            print(f"📝 Received signature: {signature}")
+            
             # Compare signatures using a constant-time comparison
             is_valid = hmac.compare_digest(signature, expected_signature)
             
             if not is_valid:
                 print(f"❌ Signature verification failed")
-                print(f"📌 Received signature: {signature}")
-                print(f"📌 Expected signature: {expected_signature}")
                 
                 # In sandbox mode, we might want to allow invalid signatures
                 # ONLY FOR TESTING PURPOSES
@@ -555,6 +566,7 @@ class PaddleWebhookView(APIView):
                     
                     # Try to find plan based on the price ID
                     # This assumes you have a way to map Paddle price IDs to your plans
+                    # For example, you might store price IDs in the plan metadata
                     try:
                         plan = get_subscription_plan_by_price_id(price_id)
                         if plan:
