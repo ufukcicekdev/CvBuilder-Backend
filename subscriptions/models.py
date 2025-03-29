@@ -48,11 +48,17 @@ class UserSubscription(models.Model):
         ('expired', _('Expired')),
         ('trial', _('Trial')),
         ('pending', _('Pending')),
+        ('past_due', _('Past Due')),
+        ('paused', _('Paused')),
     )
 
     PERIOD_CHOICES = (
         ('monthly', _('Monthly')),
         ('yearly', _('Yearly')),
+    )
+
+    PAYMENT_PROVIDER_CHOICES = (
+        ('paddle', _('Paddle')),
     )
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscription')
@@ -63,9 +69,20 @@ class UserSubscription(models.Model):
     end_date = models.DateTimeField(null=True, blank=True)
     trial_end_date = models.DateTimeField(null=True, blank=True)
     
+    # Billing and payment flags
+    is_active = models.BooleanField(default=True)
+    cancel_at_period_end = models.BooleanField(default=False)
+    payment_provider = models.CharField(max_length=20, choices=PAYMENT_PROVIDER_CHOICES, default='paddle')
+    next_payment_date = models.DateTimeField(null=True, blank=True)
+    
     # Paddle specific fields
     paddle_subscription_id = models.CharField(max_length=100, blank=True, null=True)
     paddle_customer_id = models.CharField(max_length=100, blank=True, null=True)
+    paddle_plan_id = models.CharField(max_length=100, blank=True, null=True)
+    paddle_update_url = models.CharField(max_length=255, blank=True, null=True)
+    paddle_cancel_url = models.CharField(max_length=255, blank=True, null=True)
+    paddle_checkout_id = models.CharField(max_length=100, blank=True, null=True)
+    paddle_last_payment_date = models.DateTimeField(null=True, blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
