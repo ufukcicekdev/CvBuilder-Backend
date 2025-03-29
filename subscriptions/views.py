@@ -322,6 +322,16 @@ class PaddleWebhookView(APIView):
         Returns:
             Boolean indicating if the signature is valid
         """
+        # Debug: Print settings to see if they're loaded correctly
+        print(f"🔍 PADDLE_SANDBOX setting: {settings.PADDLE_SANDBOX}")
+        print(f"🔍 PADDLE_WEBHOOK_SECRET: {settings.PADDLE_WEBHOOK_SECRET[:10]}...")
+        
+        # First check if we're in sandbox mode
+        sandbox_mode = getattr(settings, 'PADDLE_SANDBOX', False)
+        if sandbox_mode:
+            print("⚠️ SANDBOX MODE: Bypassing signature verification")
+            return True
+            
         # 1. Get the Paddle-Signature header
         signature_header = headers.get('Paddle-Signature')
         if not signature_header:
@@ -331,16 +341,8 @@ class PaddleWebhookView(APIView):
         # Get webhook secret key from settings
         webhook_secret = getattr(settings, 'PADDLE_WEBHOOK_SECRET', None)
         
-        # Check if we're in sandbox mode
-        sandbox_mode = getattr(settings, 'PADDLE_SANDBOX', False)
-        
         # Print full signature header for debugging
         print(f"📝 Received signature header: {signature_header}")
-        
-        # For testing in development/sandbox environment
-        if sandbox_mode:
-            print("⚠️ SANDBOX MODE: Bypassing signature verification")
-            return True
             
         # For production, validate the signature
         if not webhook_secret:
@@ -372,23 +374,41 @@ class PaddleWebhookView(APIView):
             print(f"📝 Data to verify (preview): {data_to_verify[:50]}...")
             
             # 4. Hash the signed payload using HMAC-SHA256 with secret key
-            # Use the raw webhook secret directly from settings
-            expected_signature = hmac.new(
+            # First try with the full webhook_secret
+            expected_signature_full = hmac.new(
                 webhook_secret.encode('utf-8'),
                 data_to_verify.encode('utf-8'),
                 hashlib.sha256
             ).hexdigest()
             
-            print(f"📝 Expected signature: {expected_signature}")
+            # Try with just the part after the last underscore if it contains pdl_ntfset
+            if webhook_secret.startswith('pdl_ntfset_'):
+                parts = webhook_secret.split('_', 3)
+                if len(parts) >= 4:
+                    key_part = parts[3]
+                    expected_signature_part = hmac.new(
+                        key_part.encode('utf-8'),
+                        data_to_verify.encode('utf-8'),
+                        hashlib.sha256
+                    ).hexdigest()
+                    print(f"📝 Expected signature (using key part): {expected_signature_part}")
+            
+            print(f"📝 Expected signature (using full key): {expected_signature_full}")
             print(f"📝 Received signature: {signature}")
             
             # 5. Compare signatures using constant-time comparison
-            is_valid = hmac.compare_digest(signature, expected_signature)
+            is_valid = hmac.compare_digest(signature, expected_signature_full)
             
-            if is_valid:
-                print("✅ Signature verification successful")
+            if webhook_secret.startswith('pdl_ntfset_') and not is_valid:
+                # Try with just the key part
+                is_valid = hmac.compare_digest(signature, expected_signature_part)
+                if is_valid:
+                    print("✅ Signature verification successful with key part")
             else:
-                print("❌ Signature verification failed")
+                if is_valid:
+                    print("✅ Signature verification successful with full key")
+                else:
+                    print("❌ Signature verification failed")
             
             return is_valid
             

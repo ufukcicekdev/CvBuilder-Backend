@@ -388,8 +388,13 @@ PADDLE_VENDOR_ID = os.getenv('PADDLE_VENDOR_ID', 'your_vendor_id')
 PADDLE_API_KEY = os.getenv('PADDLE_API_KEY', 'your_api_key')  # Paddle Billing API key
 PADDLE_PUBLIC_KEY = os.getenv('PADDLE_PUBLIC_KEY', 'your_public_key')  # For webhook verification
 PADDLE_WEBHOOK_SECRET = os.getenv('PADDLE_WEBHOOK_SECRET', '')  # Webhook secret for verification
-PADDLE_SANDBOX = os.getenv('PADDLE_SANDBOX', 'True') == 'True'
+PADDLE_SANDBOX = os.getenv('PADDLE_SANDBOX', 'False').lower() in ('true', 't', 'yes', 'y', '1')  # Daha güvenli karşılaştırma
 PADDLE_WEBHOOK_ID = os.getenv('PADDLE_WEBHOOK_ID', '')  # Webhook ID for verification
+
+# Daha detaylı debug bilgisi için
+print(f"DEBUG: PADDLE_SANDBOX env value: {os.getenv('PADDLE_SANDBOX')}")
+print(f"DEBUG: PADDLE_SANDBOX setting: {PADDLE_SANDBOX}")
+print(f"DEBUG: PADDLE_WEBHOOK_SECRET: {PADDLE_WEBHOOK_SECRET[:15]}...")
 
 # Paddle Settings dict for easy access
 PADDLE_SETTINGS = {
