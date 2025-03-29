@@ -313,7 +313,7 @@ class PaddleWebhookView(APIView):
     
     def verify_webhook_signature(self, headers, payload_json):
         """
-        Verify that a webhook was sent by Paddle
+        Verify that a webhook was sent by Paddle using signature verification
         
         Args:
             headers: Request headers with Paddle-Signature
@@ -322,7 +322,7 @@ class PaddleWebhookView(APIView):
         Returns:
             Boolean indicating if the signature is valid
         """
-        # Get the signature from headers
+        # 1. Get the Paddle-Signature header
         signature_header = headers.get('Paddle-Signature')
         if not signature_header:
             print("❌ Missing Paddle-Signature header")
@@ -348,7 +348,8 @@ class PaddleWebhookView(APIView):
             return False
         
         try:
-            # Parse the signature header - should be in format 'ts=timestamp;h1=hash'
+            # 2. Extract timestamp and signature from the header
+            # Parse signature header in format: 'ts=timestamp;h1=hash'
             signature_parts = {}
             for part in signature_header.split(';'):
                 if '=' in part:
@@ -359,31 +360,21 @@ class PaddleWebhookView(APIView):
             
             # Get timestamp and signature
             timestamp = signature_parts.get('ts')
-            # Check for h1 first (newest format), then h (older format)
-            signature = signature_parts.get('h1') or signature_parts.get('h')
+            # Get h1 signature (current Paddle format)
+            signature = signature_parts.get('h1')
             
             if not timestamp or not signature:
-                print(f"❌ Missing timestamp or hash in header: {signature_header}")
+                print(f"❌ Missing timestamp or signature in header: {signature_header}")
                 return False
             
-            # Create the string to verify: timestamp + payload
+            # 3. Build the signed payload: timestamp:payload_json
             data_to_verify = f"{timestamp}:{payload_json}"
             print(f"📝 Data to verify (preview): {data_to_verify[:50]}...")
             
-            # Extract the actual key if needed
-            if webhook_secret.startswith('pdl_ntfset_'):
-                # Format: pdl_ntfset_ID_SECRET_KEY
-                parts = webhook_secret.split('_', 3)
-                if len(parts) >= 4:
-                    actual_secret = parts[3]
-                else:
-                    actual_secret = webhook_secret
-            else:
-                actual_secret = webhook_secret
-                
-            # Calculate expected signature using HMAC and SHA-256
+            # 4. Hash the signed payload using HMAC-SHA256 with secret key
+            # Use the raw webhook secret directly from settings
             expected_signature = hmac.new(
-                actual_secret.encode('utf-8'),
+                webhook_secret.encode('utf-8'),
                 data_to_verify.encode('utf-8'),
                 hashlib.sha256
             ).hexdigest()
@@ -391,7 +382,7 @@ class PaddleWebhookView(APIView):
             print(f"📝 Expected signature: {expected_signature}")
             print(f"📝 Received signature: {signature}")
             
-            # Compare signatures using a constant-time comparison
+            # 5. Compare signatures using constant-time comparison
             is_valid = hmac.compare_digest(signature, expected_signature)
             
             if is_valid:
