@@ -381,15 +381,18 @@ SMTP2GO_FROM_EMAIL = os.getenv('SMTP2GO_FROM_EMAIL')
 
 # Frontend URL for email verification links
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+SITE_URL = os.getenv('SITE_URL', 'http://localhost:8000')
 
-# Iyzico Settings
-IYZICO_API_KEY = os.environ.get('IYZICO_API_KEY', 'your_api_key')
-IYZICO_SECRET_KEY = os.environ.get('IYZICO_SECRET_KEY', 'your_secret_key')
-IYZICO_BASE_URL = os.environ.get('IYZICO_BASE_URL', 'https://sandbox-api.iyzipay.com')
+# Paddle Billing Settings
+PADDLE_VENDOR_ID = os.environ.get('PADDLE_VENDOR_ID', 'your_vendor_id')
+PADDLE_API_KEY = os.environ.get('PADDLE_API_KEY', 'your_api_key')  # Paddle Billing API key
+PADDLE_PUBLIC_KEY = os.environ.get('PADDLE_PUBLIC_KEY', 'your_public_key')  # For webhook verification
+PADDLE_SANDBOX = os.environ.get('PADDLE_SANDBOX', 'True') == 'True'
 
-# IYZIPAY Settings dict for easy access
-IYZIPAY_SETTINGS = {
-    'api_key': IYZICO_API_KEY,
-    'secret_key': IYZICO_SECRET_KEY,
-    'base_url': IYZICO_BASE_URL
+# Paddle Settings dict for easy access
+PADDLE_SETTINGS = {
+    'vendor_id': PADDLE_VENDOR_ID, 
+    'api_key': PADDLE_API_KEY,
+    'public_key': PADDLE_PUBLIC_KEY,
+    'sandbox': PADDLE_SANDBOX
 }

@@ -113,7 +113,8 @@ class LoginView(generics.GenericAPIView):
                 'id': user.id,
                 'email': user.email,
                 'username': user.username,
-                'user_type': user.user_type
+                'user_type': user.user_type,
+                'paddle_customer_id': user.paddle_customer_id
             }
         })
 

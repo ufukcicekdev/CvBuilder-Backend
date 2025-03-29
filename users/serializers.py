@@ -61,6 +61,17 @@ class UserSerializer(serializers.ModelSerializer):
         # Email doğrulama mailini seçilen dilde gönder
         send_verification_email(user, language)
         
+        # Kullanıcı için Paddle müşteri oluştur
+        try:
+            from subscriptions.paddle_utils import create_customer
+            customer_id = create_customer(user)
+            if customer_id:
+                user.paddle_customer_id = customer_id
+                user.save(update_fields=['paddle_customer_id'])
+                print(f"Created Paddle customer for {user.email}: {customer_id}")
+        except Exception as e:
+            print(f"Error creating Paddle customer for {user.email}: {str(e)}")
+        
         return user
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):

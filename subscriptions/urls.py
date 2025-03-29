@@ -4,7 +4,7 @@ from .views import (
     SubscriptionPlanViewSet,
     UserSubscriptionViewSet,
     SubscriptionPaymentHistoryViewSet,
-    IyzicoWebhookView
+    PaddleWebhookView
 )
 
 router = DefaultRouter()
@@ -14,5 +14,5 @@ router.register(r'payment-history', SubscriptionPaymentHistoryViewSet, basename=
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('webhook/', IyzicoWebhookView.as_view(), name='iyzico-webhook'),
+    path('webhook/', PaddleWebhookView.as_view(), name='paddle-webhook'),
 ] 

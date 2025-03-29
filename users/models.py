@@ -46,6 +46,9 @@ class User(AbstractUser):
         verbose_name='Profil Resmi'
     )
     
+    # Paddle müşteri ID'si
+    paddle_customer_id = models.CharField(max_length=255, blank=True, null=True, verbose_name='Paddle Customer ID')
+    
     # Email doğrulama alanları
     is_email_verified = models.BooleanField(default=False)
     email_verification_token = models.UUIDField(default=uuid.uuid4, editable=False, null=True, blank=True)

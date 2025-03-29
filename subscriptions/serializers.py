@@ -9,7 +9,7 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
         model = SubscriptionPlan
         fields = [
             'id', 'plan_id', 'name', 'description', 'price_monthly', 
-            'price_yearly', 'plan_type', 'currency', 'features', 'is_active'
+         'plan_type', 'currency', 'features', 'is_active', "paddle_product_id", "paddle_price_id"
         ]
         read_only_fields = ['id']
 
