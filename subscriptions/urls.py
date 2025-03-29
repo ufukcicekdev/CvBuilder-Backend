@@ -3,14 +3,14 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     SubscriptionPlanViewSet,
     UserSubscriptionViewSet,
-    SubscriptionPaymentHistoryViewSet,
-    PaddleWebhookView
+    PaddleWebhookView,
+    CurrentSubscriptionViewSet
 )
 
 router = DefaultRouter()
-router.register(r'plans', SubscriptionPlanViewSet, basename='subscription-plans')
-router.register(r'subscriptions', UserSubscriptionViewSet, basename='user-subscriptions')
-router.register(r'payment-history', SubscriptionPaymentHistoryViewSet, basename='payment-history')
+router.register(r'plans', SubscriptionPlanViewSet)
+router.register(r'subscriptions', UserSubscriptionViewSet, basename='user-subscription')
+router.register(r'current', CurrentSubscriptionViewSet, basename='current-subscription')
 
 urlpatterns = [
     path('', include(router.urls)),
