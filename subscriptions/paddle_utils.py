@@ -79,8 +79,17 @@ def create_customer(user):
             print(f"Using existing Paddle customer ID: {user.paddle_customer_id}")
             return user.paddle_customer_id
         
+        # Kontrol et: options sözlüğünde api_url var mı?
+        if 'api_url' not in options:
+            # api_url yoksa, sandbox durumuna göre yeniden oluştur
+            api_url = 'https://sandbox-api.paddle.com' if settings.PADDLE_SANDBOX else 'https://api.paddle.com'
+            print(f"Warning: 'api_url' not found in options dictionary. Using default: {api_url}")
+        else:
+            # api_url varsa, onu kullan
+            api_url = options['api_url']
+        
         # Paddle Billing API endpoint for customer creation
-        endpoint = f"{options['api_url']}/customers"
+        endpoint = f"{api_url}/customers"
         
         # Prepare the request data
         # For documentation, see: https://developer.paddle.com/api-reference/customers
@@ -114,7 +123,7 @@ def create_customer(user):
             json=data,
             headers=get_paddle_headers()
         )
-        
+        print("Paddle customer response: ", response.json())
         # Process the response
         if response.status_code == 201:
             response_data = response.json()
@@ -172,6 +181,23 @@ def generate_checkout_url(user, plan, period):
     # Get or create a customer in Paddle
     customer_id = create_customer(user)
     
+    # Kontrol et: options sözlüğünde api_url ve checkout_url var mı?
+    if 'api_url' not in options:
+        # api_url yoksa, sandbox durumuna göre yeniden oluştur
+        api_url = 'https://sandbox-api.paddle.com' if settings.PADDLE_SANDBOX else 'https://api.paddle.com'
+        print(f"Warning: 'api_url' not found in options dictionary. Using default: {api_url}")
+    else:
+        # api_url varsa, onu kullan
+        api_url = options['api_url']
+
+    if 'checkout_url' not in options:
+        # checkout_url yoksa, sandbox durumuna göre yeniden oluştur
+        checkout_url = 'https://sandbox-checkout.paddle.com' if settings.PADDLE_SANDBOX else 'https://checkout.paddle.com'
+        print(f"Warning: 'checkout_url' not found in options dictionary. Using default: {checkout_url}")
+    else:
+        # checkout_url varsa, onu kullan
+        checkout_url = options['checkout_url']
+    
     # Prepare the request payload for Paddle API
     payload = {
         "items": [
@@ -193,7 +219,7 @@ def generate_checkout_url(user, plan, period):
     try:
         # Call Paddle API to create a checkout
         response = requests.post(
-            f"{options['api_url']}/checkout",
+            f"{api_url}/checkout",
             json=payload,
             headers=get_paddle_headers()
         )
@@ -201,11 +227,11 @@ def generate_checkout_url(user, plan, period):
         response_data = response.json()
         
         if response.status_code == 201 and 'data' in response_data:
-            checkout_url = response_data['data']['url']
+            checkout_url_from_response = response_data['data']['url']
             checkout_id = response_data['data']['id']
             
             return {
-                'checkout_url': checkout_url,
+                'checkout_url': checkout_url_from_response,
                 'checkout_id': checkout_id,
                 'custom_data': custom_data
             }
@@ -216,7 +242,7 @@ def generate_checkout_url(user, plan, period):
             
             # Fallback to client-side checkout for development/testing
             # In production, you should handle errors more gracefully
-            fallback_url = f"{options['checkout_url']}?price_id={price_id}&customer_email={user.email}&passthrough={json.dumps(custom_data)}"
+            fallback_url = f"{checkout_url}?price_id={price_id}&customer_email={user.email}&passthrough={json.dumps(custom_data)}"
             return {
                 'checkout_url': fallback_url,
                 'custom_data': custom_data
@@ -227,7 +253,7 @@ def generate_checkout_url(user, plan, period):
         print(f"Exception creating Paddle checkout: {str(e)}")
         
         # Fallback checkout URL for development
-        fallback_url = f"{options['checkout_url']}?price_id={price_id}&customer_email={user.email}&passthrough={json.dumps(custom_data)}"
+        fallback_url = f"{checkout_url}?price_id={price_id}&customer_email={user.email}&passthrough={json.dumps(custom_data)}"
         return {
             'checkout_url': fallback_url,
             'custom_data': custom_data
@@ -304,7 +330,7 @@ def verify_webhook_signature(headers, payload_json):
 
 def cancel_subscription(paddle_subscription_id):
     """
-    Cancel a subscription in Paddle
+    Cancel a subscription in Paddle.
     
     Args:
         paddle_subscription_id: Paddle subscription ID
@@ -312,119 +338,136 @@ def cancel_subscription(paddle_subscription_id):
     Returns:
         Boolean indicating success
     """
+    if not paddle_subscription_id:
+        print("No subscription ID provided for cancellation")
+        return False
+    
     try:
-        # The API endpoint for cancellation
-        endpoint = f"{options['api_url']}/subscriptions/{paddle_subscription_id}/cancel"
+        # Kontrol et: options sözlüğünde api_url var mı?
+        if 'api_url' not in options:
+            # api_url yoksa, sandbox durumuna göre yeniden oluştur
+            api_url = 'https://sandbox-api.paddle.com' if settings.PADDLE_SANDBOX else 'https://api.paddle.com'
+            print(f"Warning: 'api_url' not found in options dictionary. Using default: {api_url}")
+        else:
+            # api_url varsa, onu kullan
+            api_url = options['api_url']
         
-        # Make request to Paddle API
+        # Paddle API endpoint to cancel subscription
+        endpoint = f"{api_url}/subscriptions/{paddle_subscription_id}/cancel"
+        
+        # Make the API request
         response = requests.post(
             endpoint,
             headers=get_paddle_headers()
         )
         
-        # Check if the request was successful
-        if response.status_code in [200, 201, 202, 204]:
-            print(f"Successfully cancelled Paddle subscription: {paddle_subscription_id}")
+        # Process the response
+        if response.status_code == 200:
+            # Successfully canceled
             return True
         else:
             # Log error details
-            response_data = response.json()
-            error_message = response_data.get('error', {}).get('message', 'Unknown error')
-            print(f"Error cancelling Paddle subscription: {error_message}")
+            error_response = response.json()
+            error_message = error_response.get('error', {}).get('message', 'Unknown error')
+            print(f"Error canceling subscription: {error_message}")
             return False
             
     except Exception as e:
-        print(f"Exception cancelling Paddle subscription: {str(e)}")
+        print(f"Exception canceling subscription: {str(e)}")
         return False
 
 
 def get_subscription_details(paddle_subscription_id):
     """
-    Get subscription details from Paddle
+    Get details of a Paddle subscription
     
     Args:
         paddle_subscription_id: Paddle subscription ID
     
     Returns:
-        Subscription details
+        Dictionary with subscription details
     """
+    if not paddle_subscription_id:
+        print("No subscription ID provided")
+        return None
+    
     try:
-        # The API endpoint for getting subscription details
-        endpoint = f"{options['api_url']}/subscriptions/{paddle_subscription_id}"
+        # Kontrol et: options sözlüğünde api_url var mı?
+        if 'api_url' not in options:
+            # api_url yoksa, sandbox durumuna göre yeniden oluştur
+            api_url = 'https://sandbox-api.paddle.com' if settings.PADDLE_SANDBOX else 'https://api.paddle.com'
+            print(f"Warning: 'api_url' not found in options dictionary. Using default: {api_url}")
+        else:
+            # api_url varsa, onu kullan
+            api_url = options['api_url']
         
-        # Make request to Paddle API
+        # Paddle API endpoint to get subscription details
+        endpoint = f"{api_url}/subscriptions/{paddle_subscription_id}"
+        
+        # Make the API request
         response = requests.get(
             endpoint,
             headers=get_paddle_headers()
         )
         
-        # Check if the request was successful
+        # Process the response
         if response.status_code == 200:
             response_data = response.json()
             
             if 'data' in response_data:
-                subscription_data = response_data['data']
-                
-                # Map the subscription data to your format
-                return {
-                    'id': subscription_data.get('id'),
-                    'status': subscription_data.get('status'),
-                    'customer_id': subscription_data.get('customer_id'),
-                    'next_billed_at': subscription_data.get('next_billed_at'),
-                    'current_period_end': subscription_data.get('current_period_end'),
-                    'created_at': subscription_data.get('created_at'),
-                    'updated_at': subscription_data.get('updated_at')
-                }
+                return response_data['data']
             else:
-                print(f"Invalid response format from Paddle API: {response_data}")
+                print(f"Unexpected response format: {response_data}")
                 return None
         else:
             # Log error details
-            response_data = response.json()
-            error_message = response_data.get('error', {}).get('message', 'Unknown error')
-            print(f"Error getting Paddle subscription details: {error_message}")
+            error_response = response.json()
+            error_message = error_response.get('error', {}).get('message', 'Unknown error')
+            print(f"Error getting subscription details: {error_message}")
             return None
             
     except Exception as e:
-        print(f"Exception getting Paddle subscription details: {str(e)}")
-        
-        # Return None on error
+        print(f"Exception getting subscription details: {str(e)}")
         return None
 
 
-def update_payment_method(paddle_subscription_id, return_url=None):
+def update_payment_method(paddle_subscription_id):
     """
-    Generate a URL for the customer to update their payment method
+    Generate a URL to update payment method for a subscription
     
     Args:
         paddle_subscription_id: Paddle subscription ID
-        return_url: Optional URL to return to after updating payment method
     
     Returns:
-        Update URL
+        URL to update payment method
     """
+    if not paddle_subscription_id:
+        print("No subscription ID provided")
+        return None
+    
     try:
-        # In the new Paddle API, updating payment method is done through a hosted page
-        # We need to generate a checkout URL for this purpose
+        # Kontrol et: options sözlüğünde api_url var mı?
+        if 'api_url' not in options:
+            # api_url yoksa, sandbox durumuna göre yeniden oluştur
+            api_url = 'https://sandbox-api.paddle.com' if settings.PADDLE_SANDBOX else 'https://api.paddle.com'
+            print(f"Warning: 'api_url' not found in options dictionary. Using default: {api_url}")
+        else:
+            # api_url varsa, onu kullan
+            api_url = options['api_url']
         
-        # The API endpoint for creating a management link
-        endpoint = f"{options['api_url']}/payment-methods/update"
+        # Paddle API endpoint for payment method update
+        endpoint = f"{api_url}/payment-methods/update"
         
-        # Prepare the request payload
-        payload = {
-            "subscription_id": paddle_subscription_id
+        # Prepare the request data
+        data = {
+            "subscription_id": paddle_subscription_id,
+            "return_url": f"{settings.FRONTEND_URL}/account"
         }
         
-        # Add return URL if provided
-        if return_url:
-            payload["return_url"] = return_url
-        else:
-            payload["return_url"] = f"{settings.FRONTEND_URL}/account"
-        
-        # Make request to Paddle API
+        # Make the API request
         response = requests.post(
             endpoint,
-            json=payload,
+            json=data,
             headers=get_paddle_headers()
         )
         
