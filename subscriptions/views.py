@@ -923,6 +923,7 @@ class PaddleWebhookView(APIView):
             # Get subscription details from proper location
             subscription_id = subscription_data.get('id')
             subscription_status = subscription_data.get('status')
+            canceled_at = subscription_data.get('canceled_at')
             
             if not subscription_id:
                 print("❌ Missing subscription ID in webhook data")
@@ -932,7 +933,7 @@ class PaddleWebhookView(APIView):
                 )
             
             # Log for debugging
-            print(f"Processing subscription.canceled - ID: {subscription_id}, Status: {subscription_status}")
+            print(f"Processing subscription.canceled - ID: {subscription_id}, Status: {subscription_status}, Canceled at: {canceled_at}")
             
             # Find the subscription in our database
             try:
@@ -944,15 +945,36 @@ class PaddleWebhookView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Update the subscription status
+            # Update the subscription status to canceled
             user_subscription.status = 'canceled'
             
-            # Update end date if present
-            current_period = subscription_data.get('current_billing_period', {})
-            current_period_end = current_period.get('ends_at')
-            if current_period_end:
-                print(f"Updating subscription end date to: {current_period_end}")
-                user_subscription.end_date = current_period_end
+            # Dokümantasyona göre, canceled abonelikler için end_date'i belirleyelim
+            # 1. canceled_at varsa, bunu end_date olarak kullan (en doğru yaklaşım)
+            if canceled_at:
+                print(f"Setting end date to canceled_at timestamp: {canceled_at}")
+                user_subscription.end_date = canceled_at
+            else:
+                # 2. current_billing_period varsa, ends_at'i al
+                # current_billing_period null olabilir canceled abonelikler için
+                current_period = subscription_data.get('current_billing_period')
+                if current_period is not None and isinstance(current_period, dict):
+                    current_period_end = current_period.get('ends_at')
+                    if current_period_end:
+                        print(f"Setting end date to current_billing_period.ends_at: {current_period_end}")
+                        user_subscription.end_date = current_period_end
+                else:
+                    # 3. next_billed_at var mı?
+                    next_billed_at = subscription_data.get('next_billed_at')
+                    if next_billed_at:
+                        print(f"Setting end date to next_billed_at: {next_billed_at}")
+                        user_subscription.end_date = next_billed_at
+                    else:
+                        # 4. Hiçbir tarih bilgisi yoksa, şimdiki zamanı kullan
+                        print("No date information found in webhook. Setting end date to current time")
+                        user_subscription.end_date = timezone.now()
+            
+            # Mark subscription as canceled
+            user_subscription.cancel_at_period_end = True
             
             user_subscription.save()
             print(f"✅ Successfully processed subscription.canceled for ID: {subscription_id}")
@@ -1093,15 +1115,20 @@ class PaddleWebhookView(APIView):
             subscription_id = transaction_data.get('subscription_id')
             transaction_status = transaction_data.get('status')
             
-            if not subscription_id or not transaction_id:
-                print(f"❌ Missing required fields - transaction_id: {transaction_id}, subscription_id: {subscription_id}")
+            if not transaction_id:
+                print("❌ Missing transaction ID in webhook data")
                 return Response(
-                    {"status": "error", "detail": "Missing required fields"},
+                    {"status": "error", "detail": "Missing transaction ID"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Log for debugging
-            print(f"Processing transaction.paid - Transaction ID: {transaction_id}, Subscription ID: {subscription_id}, Status: {transaction_status}")
+            # Log the transaction data
+            print(f"Processing transaction.paid - ID: {transaction_id}, Subscription ID: {subscription_id}, Status: {transaction_status}")
+            
+            # If there's no subscription ID, this might be a one-time payment, we can acknowledge it
+            if not subscription_id:
+                print("No subscription ID associated with this transaction - treating as one-time payment")
+                return Response({"status": "success"}, status=status.HTTP_200_OK)
             
             # Find the subscription in our database
             try:
@@ -1113,21 +1140,44 @@ class PaddleWebhookView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Update subscription end date
-            billing_period = transaction_data.get('billing_period', {})
-            current_period_end = billing_period.get('ends_at')
-            if current_period_end:
-                print(f"Updating subscription end date to: {current_period_end}")
-                user_subscription.end_date = current_period_end
-            else:
-                # Fallback if no period end date
-                if user_subscription.period == 'monthly':
-                    user_subscription.end_date = timezone.now() + timedelta(days=30)
-                else:
-                    user_subscription.end_date = timezone.now() + timedelta(days=365)
+            # Update subscription details based on the transaction
             
-            # Ensure subscription is marked as active
-            user_subscription.status = 'active'
+            # 1. Billing period information
+            billing_period = transaction_data.get('billing_period', {})
+            if billing_period:
+                ends_at = billing_period.get('ends_at')
+                if ends_at:
+                    print(f"Setting subscription end date to billing_period.ends_at: {ends_at}")
+                    user_subscription.end_date = ends_at
+                
+                # Also check for starts_at
+                starts_at = billing_period.get('starts_at')
+                if starts_at and not user_subscription.start_date:
+                    print(f"Setting subscription start date to billing_period.starts_at: {starts_at}")
+                    user_subscription.start_date = starts_at
+            else:
+                # Fallback if no period end date - add time based on subscription period
+                if user_subscription.end_date is None:
+                    if user_subscription.period == 'monthly':
+                        user_subscription.end_date = timezone.now() + timedelta(days=30)
+                        print(f"No billing period found, setting fallback end date +30 days: {user_subscription.end_date}")
+                    else:
+                        user_subscription.end_date = timezone.now() + timedelta(days=365)
+                        print(f"No billing period found, setting fallback end date +365 days: {user_subscription.end_date}")
+            
+            # 2. Status update - paid transaction generally means active subscription
+            if transaction_status == 'paid':
+                user_subscription.status = 'active'
+                print("Transaction is paid, setting subscription status to 'active'")
+            
+            # 3. Reset cancel_at_period_end flag if applicable
+            # This is a new payment, which might mean the subscription was renewed after cancellation
+            if user_subscription.cancel_at_period_end and transaction_status == 'paid':
+                scheduled_change = transaction_data.get('subscription', {}).get('scheduled_change')
+                if not scheduled_change or scheduled_change.get('action') != 'cancel':
+                    print("New paid transaction received - resetting cancel_at_period_end flag")
+                    user_subscription.cancel_at_period_end = False
+            
             user_subscription.save()
             
             print(f"✅ Successfully processed transaction.paid for ID: {transaction_id}")
@@ -1135,363 +1185,6 @@ class PaddleWebhookView(APIView):
             
         except Exception as e:
             print(f"Error handling transaction.paid: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return Response(
-                {"status": "error", "detail": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    def _handle_subscription_activated(self, event_data):
-        """Handle subscription.activated webhook"""
-        try:
-            # Get the subscription data from the 'data' field
-            subscription_data = event_data.get('data', {})
-            
-            # Log for debugging
-            print(f"Processing subscription.activated webhook - Raw data structure: {subscription_data.keys()}")
-            
-            # Get subscription details from proper location
-            subscription_id = subscription_data.get('id')
-            subscription_status = subscription_data.get('status')
-            
-            if not subscription_id:
-                print("❌ Missing subscription ID in webhook data")
-                return Response(
-                    {"status": "error", "detail": "Missing subscription ID"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Log for debugging
-            print(f"Processing subscription.activated - ID: {subscription_id}, Status: {subscription_status}")
-            
-            # Find the subscription in our database
-            try:
-                user_subscription = UserSubscription.objects.get(paddle_subscription_id=subscription_id)
-            except UserSubscription.DoesNotExist:
-                print(f"❌ Subscription not found with ID: {subscription_id}")
-                return Response(
-                    {"status": "error", "detail": "Subscription not found"},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
-            # Update the subscription status
-            if subscription_status:
-                print(f"Updating subscription status to: {subscription_status}")
-                user_subscription.status = 'active'
-            
-            # Update end date if present
-            current_period = subscription_data.get('current_billing_period', {})
-            current_period_end = current_period.get('ends_at')
-            if current_period_end:
-                print(f"Updating subscription end date to: {current_period_end}")
-                user_subscription.end_date = current_period_end
-            
-            user_subscription.save()
-            print(f"✅ Successfully processed subscription.activated for ID: {subscription_id}")
-            
-            return Response({"status": "success"}, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            print(f"Error handling subscription.activated: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return Response(
-                {"status": "error", "detail": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    def _handle_subscription_paused(self, event_data):
-        """Handle subscription.paused webhook"""
-        try:
-            # Get the subscription data from the 'data' field
-            subscription_data = event_data.get('data', {})
-            
-            # Log for debugging
-            print(f"Processing subscription.paused webhook - Raw data structure: {subscription_data.keys()}")
-            
-            # Get subscription details from proper location
-            subscription_id = subscription_data.get('id')
-            subscription_status = subscription_data.get('status')
-            
-            if not subscription_id:
-                print("❌ Missing subscription ID in webhook data")
-                return Response(
-                    {"status": "error", "detail": "Missing subscription ID"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Log for debugging
-            print(f"Processing subscription.paused - ID: {subscription_id}, Status: {subscription_status}")
-            
-            # Find the subscription in our database
-            try:
-                user_subscription = UserSubscription.objects.get(paddle_subscription_id=subscription_id)
-            except UserSubscription.DoesNotExist:
-                print(f"❌ Subscription not found with ID: {subscription_id}")
-                return Response(
-                    {"status": "error", "detail": "Subscription not found"},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
-            # Update the subscription status
-            user_subscription.status = 'paused'
-            
-            # Update end date if present
-            current_period = subscription_data.get('current_billing_period', {})
-            current_period_end = current_period.get('ends_at')
-            if current_period_end:
-                print(f"Updating subscription end date to: {current_period_end}")
-                user_subscription.end_date = current_period_end
-            
-            user_subscription.save()
-            print(f"✅ Successfully processed subscription.paused for ID: {subscription_id}")
-            
-            return Response({"status": "success"}, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            print(f"Error handling subscription.paused: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return Response(
-                {"status": "error", "detail": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    def _handle_subscription_resumed(self, event_data):
-        """Handle subscription.resumed webhook"""
-        try:
-            # Get the subscription data from the 'data' field
-            subscription_data = event_data.get('data', {})
-            
-            # Log for debugging
-            print(f"Processing subscription.resumed webhook - Raw data structure: {subscription_data.keys()}")
-            
-            # Get subscription details from proper location
-            subscription_id = subscription_data.get('id')
-            subscription_status = subscription_data.get('status')
-            
-            if not subscription_id:
-                print("❌ Missing subscription ID in webhook data")
-                return Response(
-                    {"status": "error", "detail": "Missing subscription ID"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Log for debugging
-            print(f"Processing subscription.resumed - ID: {subscription_id}, Status: {subscription_status}")
-            
-            # Find the subscription in our database
-            try:
-                user_subscription = UserSubscription.objects.get(paddle_subscription_id=subscription_id)
-            except UserSubscription.DoesNotExist:
-                print(f"❌ Subscription not found with ID: {subscription_id}")
-                return Response(
-                    {"status": "error", "detail": "Subscription not found"},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
-            # Update the subscription status
-            if subscription_status:
-                print(f"Updating subscription status to: {subscription_status}")
-                user_subscription.status = 'active'
-            
-            # Update end date if present
-            current_period = subscription_data.get('current_billing_period', {})
-            current_period_end = current_period.get('ends_at')
-            if current_period_end:
-                print(f"Updating subscription end date to: {current_period_end}")
-                user_subscription.end_date = current_period_end
-            
-            user_subscription.save()
-            print(f"✅ Successfully processed subscription.resumed for ID: {subscription_id}")
-            
-            return Response({"status": "success"}, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            print(f"Error handling subscription.resumed: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return Response(
-                {"status": "error", "detail": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    def _handle_subscription_trialing(self, event_data):
-        """Handle subscription.trialing webhook"""
-        try:
-            # Get the subscription data from the 'data' field
-            subscription_data = event_data.get('data', {})
-            
-            # Log for debugging
-            print(f"Processing subscription.trialing webhook - Raw data structure: {subscription_data.keys()}")
-            
-            # Get subscription details from proper location
-            subscription_id = subscription_data.get('id')
-            subscription_status = subscription_data.get('status')
-            
-            if not subscription_id:
-                print("❌ Missing subscription ID in webhook data")
-                return Response(
-                    {"status": "error", "detail": "Missing subscription ID"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Log for debugging
-            print(f"Processing subscription.trialing - ID: {subscription_id}, Status: {subscription_status}")
-            
-            # Find the subscription in our database
-            try:
-                user_subscription = UserSubscription.objects.get(paddle_subscription_id=subscription_id)
-            except UserSubscription.DoesNotExist:
-                print(f"❌ Subscription not found with ID: {subscription_id}")
-                return Response(
-                    {"status": "error", "detail": "Subscription not found"},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
-            # Update the subscription status
-            user_subscription.status = 'trialing'
-            
-            # Update end date if present (trial end date)
-            current_period = subscription_data.get('current_billing_period', {})
-            current_period_end = current_period.get('ends_at')
-            if current_period_end:
-                print(f"Updating subscription end date to: {current_period_end}")
-                user_subscription.end_date = current_period_end
-            
-            user_subscription.save()
-            print(f"✅ Successfully processed subscription.trialing for ID: {subscription_id}")
-            
-            return Response({"status": "success"}, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            print(f"Error handling subscription.trialing: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return Response(
-                {"status": "error", "detail": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    def _handle_subscription_imported(self, event_data):
-        """Handle subscription.imported webhook"""
-        try:
-            # Get the subscription data from the 'data' field
-            subscription_data = event_data.get('data', {})
-            
-            # Log for debugging
-            print(f"Processing subscription.imported webhook - Raw data structure: {subscription_data.keys()}")
-            
-            # Get subscription details from proper location
-            subscription_id = subscription_data.get('id')
-            subscription_status = subscription_data.get('status')
-            
-            if not subscription_id:
-                print("❌ Missing subscription ID in webhook data")
-                return Response(
-                    {"status": "error", "detail": "Missing subscription ID"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Log for debugging
-            print(f"Processing subscription.imported - ID: {subscription_id}, Status: {subscription_status}")
-            
-            # Find the subscription in our database
-            try:
-                user_subscription = UserSubscription.objects.get(paddle_subscription_id=subscription_id)
-            except UserSubscription.DoesNotExist:
-                print(f"❌ Subscription not found with ID: {subscription_id}")
-                return Response(
-                    {"status": "error", "detail": "Subscription not found"},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
-            # Update the subscription status
-            if subscription_status:
-                print(f"Updating subscription status to: {subscription_status}")
-                if subscription_status == 'active':
-                    user_subscription.status = 'active'
-                elif subscription_status == 'paused':
-                    user_subscription.status = 'paused'
-                elif subscription_status == 'canceled':
-                    user_subscription.status = 'canceled'
-                elif subscription_status == 'past_due':
-                    user_subscription.status = 'past_due'
-                elif subscription_status == 'trialing':
-                    user_subscription.status = 'trialing'
-            
-            # Update end date if present
-            current_period = subscription_data.get('current_billing_period', {})
-            current_period_end = current_period.get('ends_at')
-            if current_period_end:
-                print(f"Updating subscription end date to: {current_period_end}")
-                user_subscription.end_date = current_period_end
-            
-            user_subscription.save()
-            print(f"✅ Successfully processed subscription.imported for ID: {subscription_id}")
-            
-            return Response({"status": "success"}, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            print(f"Error handling subscription.imported: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return Response(
-                {"status": "error", "detail": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    def _handle_subscription_past_due(self, event_data):
-        """Handle subscription.past_due webhook"""
-        try:
-            # Get the subscription data from the 'data' field
-            subscription_data = event_data.get('data', {})
-            
-            # Log for debugging
-            print(f"Processing subscription.past_due webhook - Raw data structure: {subscription_data.keys()}")
-            
-            # Get subscription details from proper location
-            subscription_id = subscription_data.get('id')
-            subscription_status = subscription_data.get('status')
-            
-            if not subscription_id:
-                print("❌ Missing subscription ID in webhook data")
-                return Response(
-                    {"status": "error", "detail": "Missing subscription ID"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Log for debugging
-            print(f"Processing subscription.past_due - ID: {subscription_id}, Status: {subscription_status}")
-            
-            # Find the subscription in our database
-            try:
-                user_subscription = UserSubscription.objects.get(paddle_subscription_id=subscription_id)
-            except UserSubscription.DoesNotExist:
-                print(f"❌ Subscription not found with ID: {subscription_id}")
-                return Response(
-                    {"status": "error", "detail": "Subscription not found"},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
-            # Update the subscription status
-            user_subscription.status = 'past_due'
-            
-            # Update end date if present
-            current_period = subscription_data.get('current_billing_period', {})
-            current_period_end = current_period.get('ends_at')
-            if current_period_end:
-                print(f"Updating subscription end date to: {current_period_end}")
-                user_subscription.end_date = current_period_end
-            
-            user_subscription.save()
-            print(f"✅ Successfully processed subscription.past_due for ID: {subscription_id}")
-            
-            return Response({"status": "success"}, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            print(f"Error handling subscription.past_due: {str(e)}")
             import traceback
             traceback.print_exc()
             return Response(
