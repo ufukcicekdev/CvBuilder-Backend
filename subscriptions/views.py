@@ -30,11 +30,10 @@ from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.decorators import action
 
 from .models import (
-    SubscriptionPlan, UserSubscription, SubscriptionPaymentHistory
+    SubscriptionPlan, UserSubscription
 )
 from .serializers import (
-    SubscriptionPlanSerializer, UserSubscriptionSerializer,
-    SubscriptionPaymentHistorySerializer
+    SubscriptionPlanSerializer, UserSubscriptionSerializer
 )
 from .paddle_utils import (
     create_customer, get_subscription_plan, generate_checkout_url, 
@@ -336,20 +335,6 @@ class UserSubscriptionViewSet(viewsets.ModelViewSet):
                 {"detail": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-
-class SubscriptionPaymentHistoryViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet for subscription payment history"""
-    serializer_class = SubscriptionPaymentHistorySerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_queryset(self):
-        """Return the user's payment history"""
-        try:
-            subscription = UserSubscription.objects.get(user=self.request.user)
-            return SubscriptionPaymentHistory.objects.filter(subscription=subscription)
-        except UserSubscription.DoesNotExist:
-            return SubscriptionPaymentHistory.objects.none()
 
 
 class CurrentSubscriptionViewSet(viewsets.ReadOnlyModelViewSet):
@@ -1016,20 +1001,6 @@ class PaddleWebhookView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Create a payment record
-            amount = payment_data.get('amount', 0)
-            currency = payment_data.get('currency', 'USD')
-            
-            payment = SubscriptionPaymentHistory.objects.create(
-                subscription=user_subscription,
-                payment_id=f"paddle_payment_{transaction_id}",
-                amount=amount,
-                currency=currency,
-                status='success',
-                paddle_payment_id=transaction_id,
-                paddle_checkout_id=payment_data.get('checkout_id')
-            )
-            
             # Update subscription end date if available
             billing_period = payment_data.get('billing_period', {})
             current_period_end = billing_period.get('ends_at')
@@ -1092,20 +1063,6 @@ class PaddleWebhookView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Create a failed payment record
-            amount = payment_data.get('amount', 0)
-            currency = payment_data.get('currency', 'USD')
-            
-            payment = SubscriptionPaymentHistory.objects.create(
-                subscription=user_subscription,
-                payment_id=f"paddle_payment_{transaction_id}",
-                amount=amount,
-                currency=currency,
-                status='failed',
-                paddle_payment_id=transaction_id,
-                paddle_checkout_id=payment_data.get('checkout_id')
-            )
-            
             # Update subscription status to past_due if needed
             user_subscription.status = 'past_due'
             user_subscription.save()
@@ -1155,20 +1112,6 @@ class PaddleWebhookView(APIView):
                     {"status": "error", "detail": "Subscription not found"},
                     status=status.HTTP_404_NOT_FOUND
                 )
-            
-            # Create a payment record
-            amount = transaction_data.get('amount', 0)
-            currency = transaction_data.get('currency', 'USD')
-            
-            payment = SubscriptionPaymentHistory.objects.create(
-                subscription=user_subscription,
-                payment_id=f"paddle_payment_{transaction_id}",
-                amount=amount,
-                currency=currency,
-                status='success',
-                paddle_payment_id=transaction_id,
-                paddle_checkout_id=transaction_data.get('checkout_id')
-            )
             
             # Update subscription end date
             billing_period = transaction_data.get('billing_period', {})
@@ -1656,20 +1599,6 @@ class PaddleWebhookView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Create a payment record
-            amount = transaction_data.get('amount', 0)
-            currency = transaction_data.get('currency', 'USD')
-            
-            payment = SubscriptionPaymentHistory.objects.create(
-                subscription=user_subscription,
-                payment_id=f"paddle_payment_{transaction_id}",
-                amount=amount,
-                currency=currency,
-                status='success',
-                paddle_payment_id=transaction_id,
-                paddle_checkout_id=transaction_data.get('checkout_id')
-            )
-            
             # Update subscription end date
             billing_period = transaction_data.get('billing_period', {})
             current_period_end = billing_period.get('ends_at')
@@ -1733,20 +1662,6 @@ class PaddleWebhookView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Create a canceled payment record
-            amount = transaction_data.get('amount', 0)
-            currency = transaction_data.get('currency', 'USD')
-            
-            payment = SubscriptionPaymentHistory.objects.create(
-                subscription=user_subscription,
-                payment_id=f"paddle_payment_{transaction_id}",
-                amount=amount,
-                currency=currency,
-                status='canceled',
-                paddle_payment_id=transaction_id,
-                paddle_checkout_id=transaction_data.get('checkout_id')
-            )
-            
             # Update subscription status
             user_subscription.status = 'canceled'
             user_subscription.save()
@@ -1796,20 +1711,6 @@ class PaddleWebhookView(APIView):
                     {"status": "error", "detail": "Subscription not found"},
                     status=status.HTTP_404_NOT_FOUND
                 )
-            
-            # Create a completed payment record
-            amount = transaction_data.get('amount', 0)
-            currency = transaction_data.get('currency', 'USD')
-            
-            payment = SubscriptionPaymentHistory.objects.create(
-                subscription=user_subscription,
-                payment_id=f"paddle_payment_{transaction_id}",
-                amount=amount,
-                currency=currency,
-                status='completed',
-                paddle_payment_id=transaction_id,
-                paddle_checkout_id=transaction_data.get('checkout_id')
-            )
             
             # Update subscription end date
             billing_period = transaction_data.get('billing_period', {})
@@ -1874,20 +1775,6 @@ class PaddleWebhookView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Create a ready payment record
-            amount = transaction_data.get('amount', 0)
-            currency = transaction_data.get('currency', 'USD')
-            
-            payment = SubscriptionPaymentHistory.objects.create(
-                subscription=user_subscription,
-                payment_id=f"paddle_payment_{transaction_id}",
-                amount=amount,
-                currency=currency,
-                status='ready',
-                paddle_payment_id=transaction_id,
-                paddle_checkout_id=transaction_data.get('checkout_id')
-            )
-            
             # Don't update subscription status for ready transactions
             
             print(f"✅ Successfully processed transaction.ready for ID: {transaction_id}")
@@ -1935,20 +1822,6 @@ class PaddleWebhookView(APIView):
                     {"status": "error", "detail": "Subscription not found"},
                     status=status.HTTP_404_NOT_FOUND
                 )
-            
-            # Create a revised payment record
-            amount = transaction_data.get('amount', 0)
-            currency = transaction_data.get('currency', 'USD')
-            
-            payment = SubscriptionPaymentHistory.objects.create(
-                subscription=user_subscription,
-                payment_id=f"paddle_payment_{transaction_id}",
-                amount=amount,
-                currency=currency,
-                status='revised',
-                paddle_payment_id=transaction_id,
-                paddle_checkout_id=transaction_data.get('checkout_id')
-            )
             
             print(f"✅ Successfully processed transaction.revised for ID: {transaction_id}")
             return Response({"status": "success"}, status=status.HTTP_200_OK)
@@ -2000,20 +1873,6 @@ class PaddleWebhookView(APIView):
             user_subscription.status = 'past_due'
             user_subscription.save()
             
-            # Create a past_due payment record
-            amount = transaction_data.get('amount', 0)
-            currency = transaction_data.get('currency', 'USD')
-            
-            payment = SubscriptionPaymentHistory.objects.create(
-                subscription=user_subscription,
-                payment_id=f"paddle_payment_{transaction_id}",
-                amount=amount,
-                currency=currency,
-                status='past_due',
-                paddle_payment_id=transaction_id,
-                paddle_checkout_id=transaction_data.get('checkout_id')
-            )
-            
             print(f"✅ Successfully processed transaction.past_due for ID: {transaction_id}")
             return Response({"status": "success"}, status=status.HTTP_200_OK)
             
@@ -2059,20 +1918,6 @@ class PaddleWebhookView(APIView):
                     {"status": "error", "detail": "Subscription not found"},
                     status=status.HTTP_404_NOT_FOUND
                 )
-            
-            # Create a failed payment record
-            amount = transaction_data.get('amount', 0)
-            currency = transaction_data.get('currency', 'USD')
-            
-            payment = SubscriptionPaymentHistory.objects.create(
-                subscription=user_subscription,
-                payment_id=f"paddle_payment_{transaction_id}",
-                amount=amount,
-                currency=currency,
-                status='failed',
-                paddle_payment_id=transaction_id,
-                paddle_checkout_id=transaction_data.get('checkout_id')
-            )
             
             # Update subscription status to past_due
             user_subscription.status = 'past_due'
