@@ -630,19 +630,30 @@ class PaddleWebhookView(APIView):
                 
             print(f"Found customer_id: {customer_id}")
             
-            # Try to find user by customer_id first (if we've stored it before)
-            user_id = User.objects.get(paddle_customer_id=customer_id).id
-            from django.contrib.auth import get_user_model
+            # Import User model first
             User = get_user_model()
             
-            # Option 1: Try to find user by paddle_customer_id
+            # Try to find user by customer_id first (if we've stored it before)
+            user_id = None
             try:
-                existing_subscription = UserSubscription.objects.filter(paddle_customer_id=customer_id).first()
-                if existing_subscription:
-                    user_id = existing_subscription.user_id
-                    print(f"Found existing user by customer_id: {user_id}")
+                user = User.objects.get(paddle_customer_id=customer_id)
+                user_id = user.id
+                print(f"Found user by customer_id: {user_id}")
+            except User.DoesNotExist:
+                print("User not found by paddle_customer_id, will try other methods")
             except Exception as e:
-                print(f"Error finding user by customer_id: {str(e)}")
+                print(f"Error finding user by paddle_customer_id: {str(e)}")
+            
+            # Option 1: Try to find user by paddle_customer_id in UserSubscription
+            if not user_id:
+                try:
+                    from .models import UserSubscription
+                    existing_subscription = UserSubscription.objects.filter(paddle_customer_id=customer_id).first()
+                    if existing_subscription:
+                        user_id = existing_subscription.user_id
+                        print(f"Found existing user by subscription customer_id: {user_id}")
+                except Exception as e:
+                    print(f"Error finding user by subscription customer_id: {str(e)}")
             
             # Option 2: If we can't find by customer_id, try to get customer email
             if not user_id:
