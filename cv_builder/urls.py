@@ -36,6 +36,8 @@ urlpatterns = [
     # CV translation endpoint
     path('cvs/<int:id>/<str:translation_key>/<str:lang>/', get_cv_by_translation, name='cv-by-translation'),
     path('api/subscriptions/', include('subscriptions.urls')),
+    # Custom Templates API endpoints
+    path('api/templates/', include('cv_templates.urls')),
 ] 
 
 if settings.DEBUG:

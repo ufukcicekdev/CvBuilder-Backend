@@ -1,0 +1,1 @@
+# Bu dosya, cv_templates dizininin bir Python modülü olduğunu belirtir 

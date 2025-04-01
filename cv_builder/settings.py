@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'contact',
     'storages',
     'subscriptions',
+    'cv_templates',
 ]
 
 MIDDLEWARE = [
