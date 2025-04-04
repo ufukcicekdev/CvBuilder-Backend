@@ -113,7 +113,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'email', 'username', 'first_name', 'last_name', 'phone', 'birth_date', 
                  'profession', 'company_name', 'company_website', 'company_position', 
-                 'company_size', 'profile_picture_url', 'user_type']
+                 'company_size', 'profile_picture_url', 'user_type', 'address']
         read_only_fields = ['id', 'email', 'username', 'profile_picture_url', 'user_type']
         extra_kwargs = {
             'profile_picture': {'write_only': True}

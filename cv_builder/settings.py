@@ -407,6 +407,25 @@ PADDLE_SETTINGS = {
     'webhook_id': PADDLE_WEBHOOK_ID
 }
 
+# PayTR Settings
+PAYTR_MERCHANT_ID = os.getenv('PAYTR_MERCHANT_ID', '')
+PAYTR_MERCHANT_KEY = os.getenv('PAYTR_MERCHANT_KEY', '')
+PAYTR_MERCHANT_SALT = os.getenv('PAYTR_MERCHANT_SALT', '')
+PAYTR_TEST_MODE = os.getenv('PAYTR_TEST_MODE', 'False').lower() in ('true', 't', 'yes', 'y', '1')
+
+# Debug PayTR ayarları
+print(f"DEBUG: PAYTR_TEST_MODE env value: {os.getenv('PAYTR_TEST_MODE')}")
+print(f"DEBUG: PAYTR_TEST_MODE setting: {PAYTR_TEST_MODE}")
+
+# PayTR ayarlarını dictionary olarak tutma
+PAYTR_SETTINGS = {
+    'merchant_id': PAYTR_MERCHANT_ID,
+    'merchant_key': PAYTR_MERCHANT_KEY,
+    'merchant_salt': PAYTR_MERCHANT_SALT,
+    'api_url': 'https://www.paytr.com/odeme/api',
+    'test_mode': PAYTR_TEST_MODE,
+}
+
 # CSRF ile ilgili eklediğimiz ayarları tamamen kaldıralım
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",

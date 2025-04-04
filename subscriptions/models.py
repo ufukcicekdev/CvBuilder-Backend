@@ -4,6 +4,36 @@ from django.utils.translation import gettext_lazy as _
 
 User = get_user_model()
 
+class PaymentGateway(models.Model):
+    """Model for payment gateways"""
+    GATEWAY_TYPE_CHOICES = (
+        ('paddle', _('Paddle')),
+        ('paytr', _('PayTR Virtual POS')),
+    )
+
+    name = models.CharField(max_length=100)
+    gateway_type = models.CharField(max_length=20, choices=GATEWAY_TYPE_CHOICES)
+    is_active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False)
+    position = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = _('Payment Gateway')
+        verbose_name_plural = _('Payment Gateways')
+        ordering = ['position']
+    
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        """Ensure only one default gateway"""
+        if self.is_default:
+            # Set all other gateways is_default to False
+            PaymentGateway.objects.exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
+
 class SubscriptionPlan(models.Model):
     """Model for subscription plans"""
     PLAN_TYPE_CHOICES = (
@@ -26,9 +56,7 @@ class SubscriptionPlan(models.Model):
 
     paddle_price_id = models.CharField(max_length=100, blank=True, null=True)
     paddle_product_id = models.CharField(max_length=100, blank=True, null=True)
-
     
-
     # Store features as JSON
     features = models.JSONField(default=dict)
 
@@ -59,6 +87,7 @@ class UserSubscription(models.Model):
 
     PAYMENT_PROVIDER_CHOICES = (
         ('paddle', _('Paddle')),
+        ('paytr', _('PayTR Virtual POS')),
     )
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscription')
@@ -109,10 +138,17 @@ class SubscriptionPaymentHistory(models.Model):
     currency = models.CharField(max_length=3, default='USD')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     payment_date = models.DateTimeField(auto_now_add=True)
+    payment_provider = models.CharField(max_length=20, choices=UserSubscription.PAYMENT_PROVIDER_CHOICES, default='paddle')
     
     # Paddle specific fields
     paddle_payment_id = models.CharField(max_length=100, blank=True, null=True)
     paddle_checkout_id = models.CharField(max_length=100, blank=True, null=True)
+    
+    # PayTR specific fields
+    paytr_merchant_oid = models.CharField(max_length=100, blank=True, null=True)
+    paytr_amount = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    paytr_payment_id = models.CharField(max_length=100, blank=True, null=True)
+    paytr_hash = models.CharField(max_length=255, blank=True, null=True)
     
     def __str__(self):
         return f"{self.subscription.user.email} - {self.amount} {self.currency} ({self.status})"

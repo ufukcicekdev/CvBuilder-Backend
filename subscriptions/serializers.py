@@ -1,6 +1,16 @@
 from rest_framework import serializers
-from .models import SubscriptionPlan, UserSubscription, SubscriptionPaymentHistory
+from .models import SubscriptionPlan, UserSubscription, SubscriptionPaymentHistory, PaymentGateway
 from django.utils.translation import gettext_lazy as _
+
+class PaymentGatewaySerializer(serializers.ModelSerializer):
+    """Serializer for payment gateways"""
+    
+    class Meta:
+        model = PaymentGateway
+        fields = [
+            'id', 'name', 'gateway_type', 'is_active', 'is_default', 'position'
+        ]
+        read_only_fields = ['id']
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
     """Serializer for subscription plans"""

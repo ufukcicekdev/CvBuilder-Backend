@@ -20,6 +20,7 @@ import base64
 import hmac
 import hashlib
 from decimal import Decimal
+import re
 
 from rest_framework import viewsets, status, permissions
 from rest_framework.views import APIView
@@ -30,10 +31,10 @@ from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.decorators import action
 
 from .models import (
-    SubscriptionPlan, UserSubscription
+    SubscriptionPlan, UserSubscription, PaymentGateway
 )
 from .serializers import (
-    SubscriptionPlanSerializer, UserSubscriptionSerializer
+    SubscriptionPlanSerializer, UserSubscriptionSerializer, PaymentGatewaySerializer
 )
 from .paddle_utils import (
     create_customer, get_subscription_plan, generate_checkout_url, 
@@ -77,84 +78,128 @@ class UserSubscriptionViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'])
     def create_subscription(self, request):
-        """Create a new subscription"""
-        serializer = CreateSubscriptionSerializer(data=request.data)
+        """Create a subscription with Paddle or PayTR
+        """
+        user = request.user
         
-        if serializer.is_valid():
-            plan_id = serializer.validated_data['plan_id']
-            period = serializer.validated_data['period']
+        # Check if user is authenticated
+        if not user.is_authenticated:
+            return Response(
+                {"detail": "Authentication required"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Get request data
+        plan_id = request.data.get('plan_id')
+        period = request.data.get('period')
+        payment_provider = request.data.get('payment_provider', 'paddle')  # Default to paddle
+        user_ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', '127.0.0.1'))
+        
+        # Validate data
+        if not plan_id or not period:
+            return Response(
+                {"detail": "Missing required fields"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if period is valid
+        if period not in ['monthly', 'yearly']:
+            return Response(
+                {"detail": "Invalid period. Must be 'monthly' or 'yearly'"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get the subscription plan
+        try:
+            plan = SubscriptionPlan.objects.get(plan_id=plan_id)
+        except SubscriptionPlan.DoesNotExist:
+            return Response(
+                {"detail": "Subscription plan not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Tüm ödeme sağlayıcıları için geçerli olacak şekilde abonelik oluştur
+        # Ancak durum 'pending' olarak ayarla, start_date ve end_date alanlarını doldur
+        # Böylece null hatası almayız
+        from django.utils import timezone
+        
+        # Get or create the user subscription
+        current_time = timezone.now()
+        subscription, created = UserSubscription.objects.get_or_create(
+            user=user,
+            defaults={
+                "plan": plan,
+                "period": period,
+                "status": "pending",
+                "payment_provider": payment_provider,
+                "start_date": current_time,  # Geçici başlangıç tarihi
+                "end_date": current_time + timedelta(days=30)  # Geçici bitiş tarihi
+            }
+        )
+        
+        # If subscription exists, update it
+        if not created:
+            subscription.plan = plan
+            subscription.period = period
+            subscription.status = "pending"
+            subscription.payment_provider = payment_provider
+            subscription.start_date = current_time
+            subscription.end_date = current_time + timedelta(days=30 if period == 'monthly' else 365)
+            subscription.save()
+        
+        # Ödeme sağlayıcısına göre farklı işlemler yap
+        if payment_provider == 'paddle':
+            # Get paddle price ID based on plan and period  
+            paddle_price_id = plan.paddle_price_id
             
-            try:
-                # Get the plan
-                plan = SubscriptionPlan.objects.get(plan_id=plan_id, is_active=True)
-                
-                # Check if the user already has a subscription
-                try:
-                    existing_subscription = UserSubscription.objects.get(user=request.user)
-                    
-                    # If the subscription is active, return an error
-                    if existing_subscription.status == 'active':
-                        return Response(
-                            {"detail": "User already has an active subscription"},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-                    
-                    # If the subscription is not active, update it
-                    existing_subscription.plan = plan
-                    existing_subscription.period = period
-                    existing_subscription.status = 'pending'
-                    existing_subscription.save()
-                    
-                    subscription = existing_subscription
-                except UserSubscription.DoesNotExist:
-                    # Create a new subscription
-                    subscription = UserSubscription.objects.create(
-                        user=request.user,
-                        plan=plan,
-                        period=period,
-                        status='pending',
-                        payment_provider='paddle',      # Set payment provider
-                        is_active=True,                # Set is_active to True
-                        cancel_at_period_end=False,    # Set cancel_at_period_end to False
-                        start_date=timezone.now()      # Set start_date to prevent NULL constraint
-                    )
-                
-                # Generate a Paddle checkout URL
-                checkout_data = generate_checkout_url(request.user, plan, period)
-                
-                # Get the price_id for Paddle.js v2 API
-                price_id = get_subscription_plan(plan, period)
-                
-                # Return the checkout data needed for Paddle.js
+            # Return the checkout data
+            return Response({
+                "checkout_url": settings.PADDLE_CHECKOUT_URL,
+                "subscription_id": subscription.id,
+                "passthrough": f"{user.id}:{subscription.id}",
+                "checkout_id": str(uuid.uuid4()),
+                "price_id": paddle_price_id
+            })
+            
+        elif payment_provider == 'paytr':
+            # PayTR için merchant_oid'ye abonelik id'sini ekleyelim
+            # NOT: PayTR, merchant_oid için alfanumerik değer gerektiriyor, alt çizgi (_) kullanılamaz!
+            merchant_oid = f"cvb{subscription.id}{uuid.uuid4().hex[:8]}"
+            
+            # Get the amount based on period
+            amount = plan.price_yearly if period == 'yearly' else plan.price_monthly
+            
+            # Merchant OID'yi subscription'a kaydet
+            subscription.paddle_checkout_id = merchant_oid
+            subscription.save()
+            
+            # Use the PayTR utility to create payment form
+            from .paytr_utils import create_payment_form
+            payment_data = create_payment_form(
+                user=user,
+                merchant_oid=merchant_oid,
+                plan=plan,
+                amount=amount,
+                period=period,
+                user_ip=user_ip
+            )
+            
+            print("PayTR payment form data:", payment_data)
+            
+            if payment_data.get('status') == 'success':
                 response_data = {
-                    'subscription_id': subscription.id,
-                    'checkout_url': checkout_data['checkout_url'],
-                    'price_id': price_id,  # Price ID for Paddle.js v2
-                    'custom_data': checkout_data.get('custom_data'),  # Include custom data
+                    "iframe_url": payment_data.get('iframe_url'),
+                    "merchant_oid": payment_data.get('merchant_oid'),
+                    "subscription_id": subscription.id
                 }
                 
-                # Include checkout_id if available
-                if 'checkout_id' in checkout_data:
-                    response_data['checkout_id'] = checkout_data['checkout_id']
-                    
-                # Include passthrough for backward compatibility
-                if 'passthrough' in checkout_data:
-                    response_data['passthrough'] = checkout_data['passthrough']
-                
-                return Response(response_data, status=status.HTTP_200_OK)
-                
-            except SubscriptionPlan.DoesNotExist:
-                return Response(
-                    {"detail": "Plan not found"},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            except Exception as e:
-                return Response(
-                    {"detail": str(e)},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                print("Sending PayTR response:", response_data)
+                return Response(response_data)
+            else:
+                print("PayTR error:", payment_data.get('message', 'Unknown error'))
+                return Response({
+                    "detail": payment_data.get('message', 'Error creating PayTR payment')
+                }, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=False, methods=['post'])
     def cancel_subscription(self, request):
@@ -2037,3 +2082,99 @@ class PaddleWebhookView(APIView):
                 {"status": "error", "detail": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class PayTRWebhookView(APIView):
+    """View for handling PayTR webhooks"""
+    permission_classes = [AllowAny]
+    
+    def post(self, request, *args, **kwargs):
+        """Handle PayTR webhook notification"""
+        try:
+            # Log the received data
+            print(f"🔔 Received PayTR webhook notification: {request.POST}")
+            
+            # Get required parameters
+            merchant_oid = request.POST.get('merchant_oid')
+            status = request.POST.get('status')
+            total_amount = request.POST.get('total_amount')
+            hash_key = request.POST.get('hash')
+            
+            # Validate required parameters
+            if not merchant_oid or not status or not total_amount or not hash_key:
+                print("❌ Missing required parameters in PayTR webhook notification")
+                return Response(
+                    {"status": "error", "detail": "Missing required parameters"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify signature
+            from .paytr_utils import verify_webhook_signature
+            if not verify_webhook_signature(request.POST, merchant_oid, status, total_amount, hash_key):
+                print("❌ Invalid signature in PayTR webhook notification")
+                return Response(
+                    {"status": "error", "detail": "Invalid signature"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Handle the notification based on status
+            if status == "success":
+                # Process successful payment
+                from .paytr_utils import process_successful_payment
+                if process_successful_payment(merchant_oid, total_amount):
+                    print(f"✅ Successfully processed PayTR payment for {merchant_oid}")
+                    return Response({"status": "OK"})
+                else:
+                    print(f"❌ Failed to process PayTR payment for {merchant_oid}")
+                    return Response({"status": "OK"})  # Still return OK to PayTR
+            else:
+                # Payment failed
+                print(f"⚠️ PayTR payment failed for {merchant_oid}")
+                
+                # Başarısız ödeme durumunda aboneliği iptal et veya güncelle
+                # Merchant OID formatı: cvb + SUBSCRIPTION_ID + RANDOM
+                if merchant_oid.startswith('cvb'):
+                    # 'cvb' sonrasındaki kısmı alalım
+                    remaining = merchant_oid[3:]
+                    
+                    # Subscription ID'yi çıkarmak için sayısal karakterleri bulalım
+                    subscription_id_match = re.match(r'^(\d+)', remaining)
+                    
+                    if subscription_id_match:
+                        # Subscription ID'yi al
+                        subscription_id = subscription_id_match.group(1)
+                        
+                        # Subscription'ı bul ve güncelle
+                        from .models import UserSubscription
+                        subscription = UserSubscription.objects.filter(id=subscription_id).first()
+                        
+                        if subscription and subscription.status == 'pending':
+                            subscription.status = 'expired'
+                            subscription.save()
+                            print(f"Abonelik durumu 'expired' olarak güncellendi: {subscription_id}")
+                
+                return Response({"status": "OK"})
+            
+        except Exception as e:
+            print(f"❌ Error processing PayTR webhook: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            # We still return OK to PayTR as they expect
+            return Response({"status": "OK"})
+
+
+class PaymentGatewayViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for payment gateways"""
+    queryset = PaymentGateway.objects.filter(is_active=True)
+    serializer_class = PaymentGatewaySerializer
+    permission_classes = [permissions.AllowAny]
+    
+    def get_queryset(self):
+        """Return all payment gateways, active or not, but sort active ones first"""
+        # Önce aktif olan, sonra diğerleri şeklinde göster
+        print("Tüm ödeme yöntemleri:", list(PaymentGateway.objects.all().values()))
+        print("Aktif ödeme yöntemleri:", list(PaymentGateway.objects.filter(is_active=True).values()))
+        
+        # Tüm payment gateway'leri verelim, UI tarafında filtreleme yapılsın
+        return PaymentGateway.objects.all().order_by('-is_active', 'position')

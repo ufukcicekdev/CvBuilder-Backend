@@ -59,6 +59,9 @@ class User(AbstractUser):
     birth_date = models.DateField(null=True, blank=True)
     profession = models.CharField(max_length=100, blank=True, null=True)
     
+    # Adres bilgisi
+    address = models.TextField(blank=True, null=True, verbose_name='Adres')
+    
     # İşveren için ek alanlar
     company_name = models.CharField(max_length=100, blank=True, null=True)
     company_website = models.URLField(blank=True, null=True)
