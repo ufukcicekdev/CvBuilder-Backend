@@ -81,6 +81,7 @@ class UserSubscriptionViewSet(viewsets.ModelViewSet):
         """Create a subscription with Paddle or PayTR
         """
         user = request.user
+        subscription_id = None
         
         # Check if user is authenticated
         if not user.is_authenticated:
@@ -147,6 +148,9 @@ class UserSubscriptionViewSet(viewsets.ModelViewSet):
             subscription.end_date = current_time + timedelta(days=30 if period == 'monthly' else 365)
             subscription.save()
         
+        subscription_id = subscription.id
+        print(f"🔔 Subscription created/updated with ID: {subscription_id}")
+        
         # Ödeme sağlayıcısına göre farklı işlemler yap
         if payment_provider == 'paddle':
             # Get paddle price ID based on plan and period  
@@ -155,8 +159,8 @@ class UserSubscriptionViewSet(viewsets.ModelViewSet):
             # Return the checkout data
             return Response({
                 "checkout_url": settings.PADDLE_CHECKOUT_URL,
-                "subscription_id": subscription.id,
-                "passthrough": f"{user.id}:{subscription.id}",
+                "subscription_id": subscription_id,
+                "passthrough": f"{user.id}:{subscription_id}",
                 "checkout_id": str(uuid.uuid4()),
                 "price_id": paddle_price_id
             })
@@ -164,7 +168,9 @@ class UserSubscriptionViewSet(viewsets.ModelViewSet):
         elif payment_provider == 'paytr':
             # PayTR için merchant_oid'ye abonelik id'sini ekleyelim
             # NOT: PayTR, merchant_oid için alfanumerik değer gerektiriyor, alt çizgi (_) kullanılamaz!
-            merchant_oid = f"cvb{subscription.id}{uuid.uuid4().hex[:8]}"
+            # Subscription ID ve random karakterlerini ayırmak için bir separator ekleyelim
+            # Böylece daha sonra ID'yi regex ile daha güvenilir şekilde ayıklayabiliriz
+            merchant_oid = f"cvb{subscription_id}x{uuid.uuid4().hex[:8]}"
             
             # Get the amount based on period
             amount = plan.price_yearly if period == 'yearly' else plan.price_monthly
@@ -172,6 +178,8 @@ class UserSubscriptionViewSet(viewsets.ModelViewSet):
             # Merchant OID'yi subscription'a kaydet
             subscription.paddle_checkout_id = merchant_oid
             subscription.save()
+            
+            print(f"💰 PayTR merchant_oid created: {merchant_oid} for subscription: {subscription_id}")
             
             # Use the PayTR utility to create payment form
             from .paytr_utils import create_payment_form
@@ -190,7 +198,7 @@ class UserSubscriptionViewSet(viewsets.ModelViewSet):
                 response_data = {
                     "iframe_url": payment_data.get('iframe_url'),
                     "merchant_oid": payment_data.get('merchant_oid'),
-                    "subscription_id": subscription.id
+                    "subscription_id": subscription_id
                 }
                 
                 print("Sending PayTR response:", response_data)
@@ -2114,6 +2122,38 @@ class PayTRWebhookView(APIView):
                 # PayTR expects "OK" response regardless of our processing status
                 return Response({"status": "OK"})
             
+            # Debug - List all active subscriptions
+            from .models import UserSubscription
+            active_subs = list(UserSubscription.objects.filter(status__in=['active', 'pending']).values('id', 'status', 'payment_provider', 'paddle_checkout_id'))
+            print(f"🔎 Active subscriptions: {active_subs}")
+            
+            # Check if merchant_oid exists in any subscription
+            matching_sub = UserSubscription.objects.filter(paddle_checkout_id=merchant_oid).first()
+            if matching_sub:
+                print(f"✅ Found subscription with merchant_oid: {merchant_oid}, ID: {matching_sub.id}")
+            else:
+                print(f"❌ No subscription found with merchant_oid: {merchant_oid}")
+                
+                # Extract ID from merchant_oid
+                if merchant_oid.startswith('cvb'):
+                    import re
+                    # Önce yeni formata göre, 'x' separator ile
+                    id_match = re.match(r'^cvb(\d+)x', merchant_oid)
+                    
+                    # Yeni formatta bulunamadıysa eski formata göre deneyelim
+                    if not id_match:
+                        print("📌 Trying legacy merchant_oid format without separator")
+                        # Eski format: sadece rakamları al
+                        id_match = re.match(r'^cvb(\d+)', merchant_oid)
+                    
+                    if id_match:
+                        extracted_id = id_match.group(1)
+                        print(f"🔍 Extracted ID from merchant_oid: {extracted_id}")
+                        
+                        # Check if this ID exists
+                        sub_exists = UserSubscription.objects.filter(id=extracted_id).exists()
+                        print(f"🔍 Subscription with ID {extracted_id} exists: {sub_exists}")
+            
             # Handle the notification based on status
             if payment_status == "success":
                 # Process successful payment
@@ -2129,27 +2169,31 @@ class PayTRWebhookView(APIView):
                 print(f"⚠️ PayTR payment failed for {merchant_oid}")
                 
                 # Başarısız ödeme durumunda aboneliği iptal et veya güncelle
-                # Merchant OID formatı: cvb + SUBSCRIPTION_ID + RANDOM
                 if merchant_oid.startswith('cvb'):
-                    # 'cvb' sonrasındaki kısmı alalım
-                    remaining = merchant_oid[3:]
-                    
-                    # Subscription ID'yi çıkarmak için sayısal karakterleri bulalım
                     import re
-                    subscription_id_match = re.match(r'^(\d+)', remaining)
+                    # Önce yeni formata göre, 'x' separator ile
+                    subscription_id_match = re.match(r'^cvb(\d+)x', merchant_oid)
+                    
+                    # Yeni formatta bulunamadıysa eski formata göre deneyelim
+                    if not subscription_id_match:
+                        # Eski format: sadece rakamları al
+                        subscription_id_match = re.match(r'^cvb(\d+)', merchant_oid)
                     
                     if subscription_id_match:
                         # Subscription ID'yi al
                         subscription_id = subscription_id_match.group(1)
+                        print(f"💡 Extracted subscription ID from failed payment: {subscription_id}")
                         
                         # Subscription'ı bul ve güncelle
-                        from .models import UserSubscription
                         subscription = UserSubscription.objects.filter(id=subscription_id).first()
                         
                         if subscription and subscription.status == 'pending':
                             subscription.status = 'expired'
                             subscription.save()
-                            print(f"Abonelik durumu 'expired' olarak güncellendi: {subscription_id}")
+                            print(f"💔 Abonelik durumu 'expired' olarak güncellendi: {subscription_id}")
+                        else:
+                            status_text = subscription.status if subscription else "not found"
+                            print(f"📝 Subscription {subscription_id} not updated, status: {status_text}")
                 
                 return Response({"status": "OK"})
             

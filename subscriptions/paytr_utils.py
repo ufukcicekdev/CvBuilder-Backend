@@ -272,66 +272,91 @@ def process_successful_payment(merchant_oid, payment_amount):
         Boolean indicating success
     """
     try:
-        # Merchant OID formatı: cvb + SUBSCRIPTION_ID + RANDOM
-        # Önce 'cvb' ön ekini kontrol edelim
-        if merchant_oid.startswith('cvb'):
-            # 'cvb' sonrasındaki kısmı alalım
-            remaining = merchant_oid[3:]
-            
-            # Subscription ID'yi çıkarmak için sayısal karakterleri bulalım
-            import re
-            subscription_id_match = re.match(r'^(\d+)', remaining)
-            
-            if subscription_id_match:
-                subscription_id = subscription_id_match.group(1)
-                print(f"Extracted subscription ID: {subscription_id}")
+        # Log the merchant_oid for debugging
+        print(f"🔄 Processing successful payment with merchant_oid: {merchant_oid}")
+        
+        # İlk önce merchant_oid ile aboneliği bulmaya çalışalım (paddle_checkout_id alanında)
+        from .models import UserSubscription
+        subscription = UserSubscription.objects.filter(paddle_checkout_id=merchant_oid).first()
+        
+        if subscription:
+            print(f"✅ Found subscription directly with merchant_oid: {merchant_oid}, ID: {subscription.id}")
+        else:
+            print(f"⚠️ No subscription found directly with merchant_oid: {merchant_oid}")
+            # Geriye dönük uyumluluk için subscription ID ekstraksiyon işlemini de deneyelim
+            # Yeni format: cvb + SUBSCRIPTION_ID + x + RANDOM
+            # Eski format: cvb + SUBSCRIPTION_ID + RANDOM
+            if merchant_oid.startswith('cvb'):
+                # ID'yi regex ile alalım - hem eski hem yeni formata uyumlu
+                import re
                 
-                # Find the subscription
-                try:
-                    subscription = UserSubscription.objects.get(id=subscription_id)
+                # Önce yeni formata göre, 'x' separator ile
+                subscription_id_match = re.match(r'^cvb(\d+)x', merchant_oid)
+                
+                # Yeni formatta bulunamadıysa eski formata göre deneyelim
+                if not subscription_id_match:
+                    print("📌 Trying legacy merchant_oid format without separator")
+                    # Eski format: sadece rakamları al (not: bu daha az güvenilir)
+                    subscription_id_match = re.match(r'^cvb(\d+)', merchant_oid)
+                
+                if subscription_id_match:
+                    subscription_id = subscription_id_match.group(1)
+                    print(f"🔍 Extracted subscription ID: {subscription_id}")
                     
-                    # Update subscription status and dates
-                    if subscription.status in ['pending', 'expired']:
-                        subscription.status = 'active'
-                        
-                        # Start date bugün, end date period'a göre belirlenir
-                        subscription.start_date = timezone.now()
-                        
-                        # Set end date based on payment date + 1 month or 1 year
-                        if subscription.period == 'yearly':
-                            subscription.end_date = timezone.now() + timedelta(days=365)  # Approximately 1 year
-                        else:
-                            subscription.end_date = timezone.now() + timedelta(days=30)  # Approximately 1 month
-                            
-                        subscription.save()
-                        
-                        # Create payment history record
-                        from .models import SubscriptionPaymentHistory
-                        payment = SubscriptionPaymentHistory.objects.create(
-                            subscription=subscription,
-                            amount=payment_amount / 100,  # Convert back from cents
-                            currency=subscription.plan.currency,
-                            status='success',
-                            payment_provider='paytr',
-                            paytr_merchant_oid=merchant_oid,
-                            paytr_amount=payment_amount / 100  # Convert back from cents
-                        )
-                        
-                        return True
+                    # Try to find the subscription with ID
+                    subscription = UserSubscription.objects.filter(id=subscription_id).first()
+                    
+                    if subscription:
+                        print(f"✅ Found subscription with ID: {subscription_id}")
+                        # Merchant OID'yi kaydedelim (böylece bir sonraki aramada bulabiliriz)
+                        subscription.paddle_checkout_id = merchant_oid
                     else:
-                        print(f"Subscription is already active or has unexpected status: {subscription.status}")
-                        return True  # Still return true to acknowledge the payment
-                    
-                except UserSubscription.DoesNotExist:
-                    print(f"No subscription found with ID: {subscription_id}")
+                        print(f"❌ No subscription found with ID: {subscription_id}")
+                        
+                        # Mevcut tüm abonelikleri listeleyelim
+                        active_subs = list(UserSubscription.objects.filter(status__in=['active', 'pending']).values('id', 'status', 'payment_provider', 'paddle_checkout_id'))
+                        print(f"🔎 Active subscriptions: {active_subs}")
+                        return False
+                else:
+                    print(f"❌ Could not extract subscription ID from merchant_oid: {merchant_oid}")
                     return False
             else:
-                print(f"Could not extract subscription ID from merchant_oid: {merchant_oid}")
+                print(f"❌ Invalid merchant_oid format (doesn't start with 'cvb'): {merchant_oid}")
                 return False
+        
+        # Bu noktada subscription nesnesi var ve işlenebilir
+        if subscription and subscription.status in ['pending', 'expired']:
+            # Update subscription status and dates
+            from django.utils import timezone
+            from datetime import timedelta
+            
+            subscription.status = 'active'
+            subscription.start_date = timezone.now()
+            
+            # Set end date based on payment date + 1 month or 1 year
+            if subscription.period == 'yearly':
+                subscription.end_date = timezone.now() + timedelta(days=365)  # Approximately 1 year
+            else:
+                subscription.end_date = timezone.now() + timedelta(days=30)  # Approximately 1 month
+            
+            # PayTR bilgilerini de subscription'a kaydet
+            subscription.payment_provider = 'paytr'  # Ödeme sağlayıcıyı güncelle
+            
+            # Kaydet
+            subscription.save()
+            
+            print(f"✅ Subscription activated successfully: {subscription.id}")
+            return True
         else:
-            print(f"Invalid merchant_oid format (doesn't start with 'cvb'): {merchant_oid}")
-            return False
+            status_message = "unknown"
+            if subscription:
+                status_message = subscription.status
+                
+            print(f"⚠️ Subscription is already active or has unexpected status: {status_message}")
+            return True  # Still return true to acknowledge the payment
         
     except Exception as e:
-        print(f"Error processing successful payment: {str(e)}")
+        print(f"❌ Error processing successful payment: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False 
