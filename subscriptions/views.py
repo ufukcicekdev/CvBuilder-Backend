@@ -2097,29 +2097,25 @@ class PayTRWebhookView(APIView):
             
             # Get required parameters
             merchant_oid = request.POST.get('merchant_oid')
-            status = request.POST.get('status')
+            payment_status = request.POST.get('status')  # Renamed from 'status' to 'payment_status'
             total_amount = request.POST.get('total_amount')
             hash_key = request.POST.get('hash')
             
             # Validate required parameters
-            if not merchant_oid or not status or not total_amount or not hash_key:
+            if not merchant_oid or not payment_status or not total_amount or not hash_key:
                 print("❌ Missing required parameters in PayTR webhook notification")
-                return Response(
-                    {"status": "error", "detail": "Missing required parameters"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                # PayTR expects "OK" response regardless of our processing status
+                return Response({"status": "OK"})
             
             # Verify signature
             from .paytr_utils import verify_webhook_signature
-            if not verify_webhook_signature(request.POST, merchant_oid, status, total_amount, hash_key):
+            if not verify_webhook_signature(request.POST, merchant_oid, payment_status, total_amount, hash_key):
                 print("❌ Invalid signature in PayTR webhook notification")
-                return Response(
-                    {"status": "error", "detail": "Invalid signature"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                # PayTR expects "OK" response regardless of our processing status
+                return Response({"status": "OK"})
             
             # Handle the notification based on status
-            if status == "success":
+            if payment_status == "success":
                 # Process successful payment
                 from .paytr_utils import process_successful_payment
                 if process_successful_payment(merchant_oid, total_amount):
@@ -2139,6 +2135,7 @@ class PayTRWebhookView(APIView):
                     remaining = merchant_oid[3:]
                     
                     # Subscription ID'yi çıkarmak için sayısal karakterleri bulalım
+                    import re
                     subscription_id_match = re.match(r'^(\d+)', remaining)
                     
                     if subscription_id_match:

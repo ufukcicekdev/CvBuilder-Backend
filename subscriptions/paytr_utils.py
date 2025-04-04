@@ -222,23 +222,44 @@ def verify_webhook_signature(request_data, merchant_oid, status, total_amount, h
         Boolean indicating if the signature is valid
     """
     try:
-        # Get merchant key and salt from settings
+        # Get options from settings
+        merchant_id = options['merchant_id']
         merchant_key = options['merchant_key']
         merchant_salt = options['merchant_salt']
         
-        # Create the hash string
-        hash_str = merchant_oid + merchant_salt + status + total_amount + merchant_key
+        print("====== PAYTR WEBHOOK VERIFICATION ======")
+        print(f"Merchant ID: {merchant_id}")
+        print(f"Merchant Order ID: {merchant_oid}")
+        print(f"Payment Status: {status}")
+        print(f"Total Amount: {total_amount}")
+        print(f"Received Hash: {hash_key}")
         
-        # Compute hash
-        calculated_hash = base64.b64encode(hashlib.sha256(hash_str.encode('utf-8')).digest()).decode('utf-8')
+        # PayTR dokümantasyonunda Node.js örneğindeki hash doğrulama algoritması:
+        # paytr_token = merchant_oid + merchant_salt + status + total_amount
+        # token = crypto.createHmac('sha256', merchant_key).update(paytr_token).digest('base64')
+        
+        # Formüle göre hash oluştur
+        paytr_token = merchant_oid + merchant_salt + status + total_amount
+        
+        print(f"Hash String (Token): {paytr_token}")
+        
+        # Compute hash with HMAC using merchant_key - Node.js örneğindeki gibi
+        hash_obj = hmac.new(merchant_key.encode('utf-8'), paytr_token.encode('utf-8'), hashlib.sha256)
+        calculated_hash = base64.b64encode(hash_obj.digest()).decode('utf-8')
+        
+        print(f"Generated Hash: {calculated_hash}")
+        print(f"Hash Matched: {calculated_hash == hash_key}")
+        print("=========================================")
         
         # Compare hashes
         return calculated_hash == hash_key
         
     except Exception as e:
-        print(f"Error verifying PayTR webhook signature: {str(e)}")
+        print(f"❌ Error verifying PayTR webhook signature: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
-        
+
 def process_successful_payment(merchant_oid, payment_amount):
     """
     Process a successful payment
