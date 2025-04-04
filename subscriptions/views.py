@@ -2099,6 +2099,8 @@ class PayTRWebhookView(APIView):
     
     def post(self, request, *args, **kwargs):
         """Handle PayTR webhook notification"""
+        from django.http import HttpResponse
+        
         try:
             # Log the received data
             print(f"🔔 Received PayTR webhook notification: {request.POST}")
@@ -2112,15 +2114,15 @@ class PayTRWebhookView(APIView):
             # Validate required parameters
             if not merchant_oid or not payment_status or not total_amount or not hash_key:
                 print("❌ Missing required parameters in PayTR webhook notification")
-                # PayTR expects "OK" response regardless of our processing status
-                return Response({"status": "OK"})
+                # PayTR expects "OK" as plain text response
+                return HttpResponse("OK")
             
             # Verify signature
             from .paytr_utils import verify_webhook_signature
             if not verify_webhook_signature(request.POST, merchant_oid, payment_status, total_amount, hash_key):
                 print("❌ Invalid signature in PayTR webhook notification")
-                # PayTR expects "OK" response regardless of our processing status
-                return Response({"status": "OK"})
+                # PayTR expects "OK" as plain text response
+                return HttpResponse("OK")
             
             # Debug - List all active subscriptions
             from .models import UserSubscription
@@ -2160,10 +2162,8 @@ class PayTRWebhookView(APIView):
                 from .paytr_utils import process_successful_payment
                 if process_successful_payment(merchant_oid, total_amount):
                     print(f"✅ Successfully processed PayTR payment for {merchant_oid}")
-                    return Response({"status": "OK"})
                 else:
                     print(f"❌ Failed to process PayTR payment for {merchant_oid}")
-                    return Response({"status": "OK"})  # Still return OK to PayTR
             else:
                 # Payment failed
                 print(f"⚠️ PayTR payment failed for {merchant_oid}")
@@ -2194,15 +2194,16 @@ class PayTRWebhookView(APIView):
                         else:
                             status_text = subscription.status if subscription else "not found"
                             print(f"📝 Subscription {subscription_id} not updated, status: {status_text}")
-                
-                return Response({"status": "OK"})
+            
+            # Her durumda PayTR'ye "OK" yanıtı döndür - dokümana göre düz string olmalı
+            return HttpResponse("OK")
             
         except Exception as e:
             print(f"❌ Error processing PayTR webhook: {str(e)}")
             import traceback
             traceback.print_exc()
-            # We still return OK to PayTR as they expect
-            return Response({"status": "OK"})
+            # We still return OK to PayTR as they expect - Even on errors
+            return HttpResponse("OK")
 
 
 class PaymentGatewayViewSet(viewsets.ReadOnlyModelViewSet):
