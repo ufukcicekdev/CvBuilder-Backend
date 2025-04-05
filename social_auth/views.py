@@ -53,6 +53,7 @@ def google_auth(request):
         print(f"User email: {email}")
 
         # Kullanıcı oluşturma veya güncelleme
+        is_new_user = False
         try:
             user = User.objects.get(email=email)
             print(f"Existing user found: {user.id}")
@@ -62,8 +63,21 @@ def google_auth(request):
                 user.is_email_verified = True
                 user.save()
                 print(f"User email verified: {user.id}")
+            
+            # Paddle customer ID kontrolü yap - eğer yoksa oluştur
+            if not user.paddle_customer_id:
+                try:
+                    from subscriptions.paddle_utils import create_customer
+                    customer_id = create_customer(user)
+                    if customer_id:
+                        user.paddle_customer_id = customer_id
+                        user.save(update_fields=['paddle_customer_id'])
+                        print(f"Created Paddle customer for existing user {user.email}: {customer_id}")
+                except Exception as e:
+                    print(f"Error creating Paddle customer for existing user {user.email}: {str(e)}")
                 
         except User.DoesNotExist:
+            is_new_user = True
             print(f"Creating new user with email: {email}")
             user = User.objects.create(
                 email=email,
@@ -78,6 +92,51 @@ def google_auth(request):
                 is_email_verified=True  # Google ile giriş yapan kullanıcılar otomatik olarak doğrulanmış kabul edilir
             )
             print(f"New user created: {user.id}")
+            
+            # Kullanıcı için Paddle müşteri oluştur
+            try:
+                from subscriptions.paddle_utils import create_customer
+                customer_id = create_customer(user)
+                if customer_id:
+                    user.paddle_customer_id = customer_id
+                    user.save(update_fields=['paddle_customer_id'])
+                    print(f"Created Paddle customer for {user.email}: {customer_id}")
+            except Exception as e:
+                print(f"Error creating Paddle customer for {user.email}: {str(e)}")
+
+        # Deneme süresi kontrolü - 7 günlük deneme aboneliği oluştur
+        try:
+            from subscriptions.models import UserSubscription, SubscriptionPlan
+            from django.utils import timezone
+            from datetime import timedelta
+            
+            # Kullanıcının zaten aboneliği var mı kontrol et
+            subscription_exists = hasattr(user, 'subscription')
+            
+            if not subscription_exists:
+                # Free plan bulunması
+                free_plan = SubscriptionPlan.objects.filter(plan_type='free', is_active=True).first()
+                
+                if free_plan:
+                    # Tarih ayarları
+                    current_time = timezone.now()
+                    trial_end = current_time + timedelta(days=7)  # 7 günlük deneme süresi
+                    
+                    # Deneme aboneliği oluşturma
+                    UserSubscription.objects.create(
+                        user=user,
+                        plan=free_plan,
+                        status='trial',
+                        period='monthly',
+                        start_date=current_time,
+                        end_date=trial_end,
+                        trial_end_date=trial_end,
+                        is_active=True
+                    )
+                    print(f"Created 7-day trial subscription for user {user.email}")
+        except Exception as e:
+            print(f"Error creating trial subscription: {str(e)}")
+            # Hata olsa bile login işlemine devam et - kritik değil
 
         serializer = UserSerializer(user)
         # JWT token oluştur
@@ -148,6 +207,64 @@ def linkedin_auth(request):
                 'user_type': 'jobseeker'
             }
         )
+        
+        # Paddle müşteri kontrolü yap
+        if created:
+            # Yeni kullanıcı için Paddle müşteri oluştur
+            try:
+                from subscriptions.paddle_utils import create_customer
+                customer_id = create_customer(user)
+                if customer_id:
+                    user.paddle_customer_id = customer_id
+                    user.save(update_fields=['paddle_customer_id'])
+                    print(f"Created Paddle customer for new LinkedIn user {user.email}: {customer_id}")
+            except Exception as e:
+                print(f"Error creating Paddle customer for new LinkedIn user {user.email}: {str(e)}")
+        elif not user.paddle_customer_id:
+            # Var olan kullanıcının paddle_customer_id'si yoksa oluştur
+            try:
+                from subscriptions.paddle_utils import create_customer
+                customer_id = create_customer(user)
+                if customer_id:
+                    user.paddle_customer_id = customer_id
+                    user.save(update_fields=['paddle_customer_id'])
+                    print(f"Created Paddle customer for existing LinkedIn user {user.email}: {customer_id}")
+            except Exception as e:
+                print(f"Error creating Paddle customer for existing LinkedIn user {user.email}: {str(e)}")
+
+        # Deneme süresi kontrolü - 7 günlük deneme aboneliği oluştur
+        try:
+            from subscriptions.models import UserSubscription, SubscriptionPlan
+            from django.utils import timezone
+            from datetime import timedelta
+            
+            # Kullanıcının zaten aboneliği var mı kontrol et
+            subscription_exists = hasattr(user, 'subscription')
+            
+            if not subscription_exists:
+                # Free plan bulunması
+                free_plan = SubscriptionPlan.objects.filter(plan_type='free', is_active=True).first()
+                
+                if free_plan:
+                    # Tarih ayarları
+                    current_time = timezone.now()
+                    trial_end = current_time + timedelta(days=7)  # 7 günlük deneme süresi
+                    
+                    # Deneme aboneliği oluşturma
+                    UserSubscription.objects.create(
+                        user=user,
+                        plan=free_plan,
+                        status='trial',
+                        period='monthly',
+                        start_date=current_time,
+                        end_date=trial_end,
+                        trial_end_date=trial_end,
+                        is_active=True
+                    )
+                    print(f"Created 7-day trial subscription for LinkedIn user {user.email}")
+        except Exception as e:
+            print(f"Error creating trial subscription for LinkedIn user: {str(e)}")
+            # Hata olsa bile login işlemine devam et - kritik değil
 
         serializer = UserSerializer(user)
         # JWT token oluştur

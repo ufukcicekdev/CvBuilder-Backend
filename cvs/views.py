@@ -464,7 +464,55 @@ class CVListCreateView(generics.ListCreateAPIView):
         return CV.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        user = self.request.user
+        
+        # Kullanıcının abonelik durumunu kontrol et
+        try:
+            from subscriptions.models import UserSubscription
+            from django.utils import timezone
+            
+            try:
+                user_subscription = UserSubscription.objects.get(user=user)
+                
+                # Eğer kullanıcı deneme sürümündeyse (trial)
+                if user_subscription.status == 'trial':
+                    # Deneme süresinin geçerli olup olmadığını kontrol et
+                    current_time = timezone.now()
+                    
+                    # Deneme süresi bitmiş mi kontrol et
+                    if user_subscription.trial_end_date and user_subscription.trial_end_date <= current_time:
+                        from rest_framework.exceptions import PermissionDenied
+                        from django.utils.translation import gettext as _
+                        
+                        # Deneme süresi bitmiş kullanıcı CV oluşturamaz
+                        raise PermissionDenied(
+                            _("Your trial period has expired. Please upgrade your subscription to create CVs.")
+                        )
+                    
+                    # Deneme süresi hala devam ediyor, CV sayısı kontrolü yap
+                    cv_count = CV.objects.filter(user=user).count()
+                    
+                    # Deneme sürümündeki kullanıcı sadece 1 CV oluşturabilir
+                    if cv_count >= 1:
+                        from rest_framework.exceptions import PermissionDenied
+                        from django.utils.translation import gettext as _
+                        
+                        raise PermissionDenied(
+                            _("Trial users can only create 1 CV. Please upgrade your subscription.")
+                        )
+                
+            except UserSubscription.DoesNotExist:
+                # Kullanıcının aboneliği yoksa, bu kişiye bir CV oluşturmasına izin ver
+                # (Zaten trial oluşturma işlemi login olduğunda yapılıyor)
+                pass
+                
+        except Exception as e:
+            # Bu kısımda sadece log tutuyoruz, kullanıcının CV oluşturmasını engellemiyor
+            # kütüphane yoksa veya başka bir hata varsa
+            print(f"Error checking subscription status during CV creation: {str(e)}")
+        
+        # CV'yi oluştur
+        serializer.save(user=user)
 
 class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CVSerializer
@@ -1146,6 +1194,7 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
                 from channels.layers import get_channel_layer
                 channel_layer = get_channel_layer()
                 group_name = get_cv_group_name(instance.id, instance.translation_key, current_lang, template_id)
+                
                 
                 print(f"Alternatif yöntem için grup adı: {group_name}")
                 

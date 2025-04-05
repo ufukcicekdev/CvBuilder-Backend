@@ -404,7 +404,36 @@ class CurrentSubscriptionViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             subscription = UserSubscription.objects.get(user=request.user)
             serializer = self.get_serializer(subscription)
-            return Response(serializer.data)
+            
+            # Serializerdan gelen veriyi bir dict'e dönüştürelim
+            response_data = dict(serializer.data)
+            
+            # Trial için kalan gün sayısını hesapla
+            if subscription.status == 'trial' and subscription.trial_end_date:
+                from django.utils import timezone
+                from datetime import timedelta
+                
+                # Eğer deneme süresi varsa, kalan günü hesapla
+                current_time = timezone.now()
+                
+                # Eğer deneme süresi daha bitmemişse
+                if subscription.trial_end_date > current_time:
+                    # Kalan zamanı timedelta olarak hesapla
+                    remaining_time = subscription.trial_end_date - current_time
+                    # Gün sayısına çevir (tam sayı olarak yuvarla)
+                    trial_days_left = max(0, remaining_time.days)
+                    
+                    # Saat bazında hassasiyet için
+                    if remaining_time.seconds > 0 and trial_days_left == 0:
+                        trial_days_left = 1  # Son günde bile en az 1 gün göster
+                else:
+                    trial_days_left = 0
+                    
+                # Response verisine ekle
+                response_data['trial_days_left'] = trial_days_left
+                print(f"User {request.user.email} has {trial_days_left} trial days left")
+            
+            return Response(response_data)
         except UserSubscription.DoesNotExist:
             # Return an empty response with 200 OK instead of 404
             return Response(

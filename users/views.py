@@ -106,6 +106,40 @@ class LoginView(generics.GenericAPIView):
         # Token oluştur
         refresh = RefreshToken.for_user(user)
         
+        # Deneme süresi kontrolü - 7 günlük deneme aboneliği oluştur
+        try:
+            from subscriptions.models import UserSubscription, SubscriptionPlan
+            from django.utils import timezone
+            from datetime import timedelta
+            
+            # Kullanıcının zaten aboneliği var mı kontrol et
+            subscription_exists = hasattr(user, 'subscription')
+            
+            if not subscription_exists:
+                # Free plan bulunması
+                free_plan = SubscriptionPlan.objects.filter(plan_type='free', is_active=True).first()
+                
+                if free_plan:
+                    # Tarih ayarları
+                    current_time = timezone.now()
+                    trial_end = current_time + timedelta(days=7)  # 7 günlük deneme süresi
+                    
+                    # Deneme aboneliği oluşturma
+                    UserSubscription.objects.create(
+                        user=user,
+                        plan=free_plan,
+                        status='trial',
+                        period='monthly',
+                        start_date=current_time,
+                        end_date=trial_end,
+                        trial_end_date=trial_end,
+                        is_active=True
+                    )
+                    print(f"Created 7-day trial subscription for user {user.email}")
+        except Exception as e:
+            print(f"Error creating trial subscription: {str(e)}")
+            # Hata olsa bile login işlemine devam et - kritik değil
+        
         return Response({
             'refresh': str(refresh),
             'access': str(refresh.access_token),
