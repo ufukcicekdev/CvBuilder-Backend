@@ -64,5 +64,6 @@ class SchedulerConfig(AppConfig):
         try:
             scheduler.start()
         except Exception as e:
-            print(f"Scheduler error: {e}")
+            # print(f"Scheduler error: {e}")
+            pass
 

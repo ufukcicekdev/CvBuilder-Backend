@@ -135,10 +135,10 @@ class LoginView(generics.GenericAPIView):
                         trial_end_date=trial_end,
                         is_active=True
                     )
-                    print(f"Created 7-day trial subscription for user {user.email}")
+                    # print(f"Created 7-day trial subscription for user {user.email}")
         except Exception as e:
-            print(f"Error creating trial subscription: {str(e)}")
-            # Hata olsa bile login işlemine devam et - kritik değil
+            # print(f"Error creating trial subscription: {str(e)}")
+            pass
         
         return Response({
             'refresh': str(refresh),

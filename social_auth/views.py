@@ -26,45 +26,27 @@ logger = logging.getLogger(__name__)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def google_auth(request):
-    print("Google auth endpoint called")
-    print(f"Request data: {request.data}")
-    
-    token = request.data.get('token')
-    if not token:
-        print("No token provided")
-        return Response({'error': 'No token provided'}, status=status.HTTP_400_BAD_REQUEST)
-    
     try:
-        print(f"Verifying Google token with client ID: {SOCIAL_AUTH_GOOGLE_OAUTH2_KEY}")
-        idinfo = id_token.verify_oauth2_token(
-            token, requests.Request(), SOCIAL_AUTH_GOOGLE_OAUTH2_KEY)
+        token = request.data.get('token')
+        if not token:
+            return Response({'error': 'No token provided'}, status=status.HTTP_400_BAD_REQUEST)
 
-        print(f"Token verified, idinfo: {json.dumps(idinfo, indent=2)}")
-        
-        # Token doğrulama kontrolü
+        idinfo = id_token.verify_oauth2_token(token, requests.Request(), SOCIAL_AUTH_GOOGLE_OAUTH2_KEY)
+
         if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
-            print(f"Invalid issuer: {idinfo['iss']}")
-            return Response({'error': 'Wrong issuer'}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValueError('Wrong issuer.')
 
         email = idinfo['email']
-        name = idinfo.get('name', '')
-        picture = idinfo.get('picture', '')
-        
-        print(f"User email: {email}")
+        first_name = idinfo.get('given_name', '')
+        last_name = idinfo.get('family_name', '')
 
-        # Kullanıcı oluşturma veya güncelleme
-        is_new_user = False
         try:
             user = User.objects.get(email=email)
-            print(f"Existing user found: {user.id}")
-            
-            # Kullanıcı varsa ve email doğrulanmamışsa, doğrula
-            if not user.is_email_verified:
-                user.is_email_verified = True
+
+            if not user.email_verified:
+                user.email_verified = True
                 user.save()
-                print(f"User email verified: {user.id}")
-            
-            # Paddle customer ID kontrolü yap - eğer yoksa oluştur
+
             if not user.paddle_customer_id:
                 try:
                     from subscriptions.paddle_utils import create_customer
@@ -72,77 +54,64 @@ def google_auth(request):
                     if customer_id:
                         user.paddle_customer_id = customer_id
                         user.save(update_fields=['paddle_customer_id'])
-                        print(f"Created Paddle customer for existing user {user.email}: {customer_id}")
                 except Exception as e:
-                    print(f"Error creating Paddle customer for existing user {user.email}: {str(e)}")
-                
+                    pass
+
         except User.DoesNotExist:
-            is_new_user = True
-            print(f"Creating new user with email: {email}")
             user = User.objects.create(
-                email=email,
                 username=email,
-                first_name=name.split()[0] if name and len(name.split()) > 0 else '',
-                last_name=name.split()[1] if name and len(name.split()) > 1 else '',
-                social_id=idinfo['sub'],
-                social_provider='google',
-                profile_picture=picture,
-                user_type='jobseeker',
-                is_active=True,
-                is_email_verified=True  # Google ile giriş yapan kullanıcılar otomatik olarak doğrulanmış kabul edilir
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                email_verified=True,
+                auth_provider='google'
             )
-            print(f"New user created: {user.id}")
-            
-            # Kullanıcı için Paddle müşteri oluştur
+
             try:
                 from subscriptions.paddle_utils import create_customer
                 customer_id = create_customer(user)
                 if customer_id:
                     user.paddle_customer_id = customer_id
                     user.save(update_fields=['paddle_customer_id'])
-                    print(f"Created Paddle customer for {user.email}: {customer_id}")
             except Exception as e:
-                print(f"Error creating Paddle customer for {user.email}: {str(e)}")
+                pass
 
-        # Deneme süresi kontrolü - 7 günlük deneme aboneliği oluştur
-        try:
-            from subscriptions.models import UserSubscription, SubscriptionPlan
-            from django.utils import timezone
-            from datetime import timedelta
-            
-            # Kullanıcının zaten aboneliği var mı kontrol et
-            subscription_exists = hasattr(user, 'subscription')
-            
-            if not subscription_exists:
-                # Free plan bulunması
-                free_plan = SubscriptionPlan.objects.filter(plan_type='free', is_active=True).first()
+            from users.models import Profile
+            Profile.objects.create(
+                user=user,
+                language='en'
+            )
+
+            try:
+                from subscriptions.models import UserSubscription, SubscriptionPlan
+                from django.utils import timezone
+                from datetime import timedelta
                 
-                if free_plan:
-                    # Tarih ayarları
-                    current_time = timezone.now()
-                    trial_end = current_time + timedelta(days=7)  # 7 günlük deneme süresi
+                subscription_exists = hasattr(user, 'subscription')
+                
+                if not subscription_exists:
+                    free_plan = SubscriptionPlan.objects.filter(plan_type='free', is_active=True).first()
                     
-                    # Deneme aboneliği oluşturma
-                    UserSubscription.objects.create(
-                        user=user,
-                        plan=free_plan,
-                        status='trial',
-                        period='monthly',
-                        start_date=current_time,
-                        end_date=trial_end,
-                        trial_end_date=trial_end,
-                        is_active=True
-                    )
-                    print(f"Created 7-day trial subscription for user {user.email}")
-        except Exception as e:
-            print(f"Error creating trial subscription: {str(e)}")
-            # Hata olsa bile login işlemine devam et - kritik değil
+                    if free_plan:
+                        current_time = timezone.now()
+                        trial_end = current_time + timedelta(days=7)
+                        
+                        UserSubscription.objects.create(
+                            user=user,
+                            plan=free_plan,
+                            status='trial',
+                            period='monthly',
+                            start_date=current_time,
+                            end_date=trial_end,
+                            trial_end_date=trial_end,
+                            is_active=True
+                        )
+            except Exception as e:
+                pass
 
         serializer = UserSerializer(user)
-        # JWT token oluştur
         refresh = RefreshToken.for_user(user)
         
-        print(f"Authentication successful for user {user.id}")
         return Response({
             'refresh': str(refresh),
             'access': str(refresh.access_token),
@@ -160,20 +129,15 @@ def google_auth(request):
         })
 
     except ValueError as e:
-        print(f"Invalid token: {str(e)}")
-        print(traceback.format_exc())
-        return Response({'error': f'Invalid token: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
-        print(f"Authentication failed: {str(e)}")
-        print(traceback.format_exc())
-        return Response({'error': f'Authentication failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def linkedin_auth(request):
     code = request.data.get('code')
     try:
-        # LinkedIn token alma
         token_url = 'https://www.linkedin.com/oauth/v2/accessToken'
         token_data = {
             'grant_type': 'authorization_code',
@@ -185,7 +149,6 @@ def linkedin_auth(request):
         token_response = http_requests.post(token_url, data=token_data)
         access_token = token_response.json()['access_token']
 
-        # Kullanıcı bilgilerini alma
         user_url = 'https://api.linkedin.com/v2/me'
         email_url = 'https://api.linkedin.com/v2/emailAddress'
         headers = {'Authorization': f'Bearer {access_token}'}
@@ -208,49 +171,39 @@ def linkedin_auth(request):
             }
         )
         
-        # Paddle müşteri kontrolü yap
         if created:
-            # Yeni kullanıcı için Paddle müşteri oluştur
             try:
                 from subscriptions.paddle_utils import create_customer
                 customer_id = create_customer(user)
                 if customer_id:
                     user.paddle_customer_id = customer_id
                     user.save(update_fields=['paddle_customer_id'])
-                    print(f"Created Paddle customer for new LinkedIn user {user.email}: {customer_id}")
             except Exception as e:
-                print(f"Error creating Paddle customer for new LinkedIn user {user.email}: {str(e)}")
+                pass
         elif not user.paddle_customer_id:
-            # Var olan kullanıcının paddle_customer_id'si yoksa oluştur
             try:
                 from subscriptions.paddle_utils import create_customer
                 customer_id = create_customer(user)
                 if customer_id:
                     user.paddle_customer_id = customer_id
                     user.save(update_fields=['paddle_customer_id'])
-                    print(f"Created Paddle customer for existing LinkedIn user {user.email}: {customer_id}")
             except Exception as e:
-                print(f"Error creating Paddle customer for existing LinkedIn user {user.email}: {str(e)}")
+                pass
 
-        # Deneme süresi kontrolü - 7 günlük deneme aboneliği oluştur
         try:
             from subscriptions.models import UserSubscription, SubscriptionPlan
             from django.utils import timezone
             from datetime import timedelta
             
-            # Kullanıcının zaten aboneliği var mı kontrol et
             subscription_exists = hasattr(user, 'subscription')
             
             if not subscription_exists:
-                # Free plan bulunması
                 free_plan = SubscriptionPlan.objects.filter(plan_type='free', is_active=True).first()
                 
                 if free_plan:
-                    # Tarih ayarları
                     current_time = timezone.now()
-                    trial_end = current_time + timedelta(days=7)  # 7 günlük deneme süresi
+                    trial_end = current_time + timedelta(days=7)
                     
-                    # Deneme aboneliği oluşturma
                     UserSubscription.objects.create(
                         user=user,
                         plan=free_plan,
@@ -261,13 +214,10 @@ def linkedin_auth(request):
                         trial_end_date=trial_end,
                         is_active=True
                     )
-                    print(f"Created 7-day trial subscription for LinkedIn user {user.email}")
         except Exception as e:
-            print(f"Error creating trial subscription for LinkedIn user: {str(e)}")
-            # Hata olsa bile login işlemine devam et - kritik değil
+            pass
 
         serializer = UserSerializer(user)
-        # JWT token oluştur
         refresh = RefreshToken.for_user(user)
         
         return Response({

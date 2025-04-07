@@ -68,9 +68,10 @@ class UserSerializer(serializers.ModelSerializer):
             if customer_id:
                 user.paddle_customer_id = customer_id
                 user.save(update_fields=['paddle_customer_id'])
-                print(f"Created Paddle customer for {user.email}: {customer_id}")
+                # print(f"Created Paddle customer for {user.email}: {customer_id}")
         except Exception as e:
-            print(f"Error creating Paddle customer for {user.email}: {str(e)}")
+            # print(f"Error creating Paddle customer for {user.email}: {str(e)}")
+            pass
         
         return user
 

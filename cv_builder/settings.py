@@ -389,43 +389,15 @@ SITE_URL = os.getenv('SITE_URL', 'http://localhost:8000')
 PADDLE_VENDOR_ID = os.getenv('PADDLE_VENDOR_ID', 'your_vendor_id')
 PADDLE_API_KEY = os.getenv('PADDLE_API_KEY', 'your_api_key')  # Paddle Billing API key
 PADDLE_PUBLIC_KEY = os.getenv('PADDLE_PUBLIC_KEY', 'your_public_key')  # For webhook verification
-PADDLE_WEBHOOK_SECRET = os.getenv('PADDLE_WEBHOOK_SECRET', '')  # Webhook secret for verification
-PADDLE_SANDBOX = os.getenv('PADDLE_SANDBOX', 'False').lower() in ('true', 't', 'yes', 'y', '1')  # Daha güvenli karşılaştırma
+PADDLE_WEBHOOK_SECRET = os.getenv('PADDLE_WEBHOOK_SECRET', 'CPoIBViuCqYpIFY...')
+PADDLE_SANDBOX = os.getenv('PADDLE_SANDBOX', 'true').lower() == 'true'
 PADDLE_WEBHOOK_ID = os.getenv('PADDLE_WEBHOOK_ID', '')  # Webhook ID for verification
-
-# Daha detaylı debug bilgisi için
-print(f"DEBUG: PADDLE_SANDBOX env value: {os.getenv('PADDLE_SANDBOX')}")
-print(f"DEBUG: PADDLE_SANDBOX setting: {PADDLE_SANDBOX}")
-print(f"DEBUG: PADDLE_WEBHOOK_SECRET: {PADDLE_WEBHOOK_SECRET[:15]}...")
-
-# Paddle Settings dict for easy access
-PADDLE_SETTINGS = {
-    'vendor_id': PADDLE_VENDOR_ID, 
-    'api_key': PADDLE_API_KEY,
-    'public_key': PADDLE_PUBLIC_KEY,
-    'webhook_secret': PADDLE_WEBHOOK_SECRET,
-    'sandbox': PADDLE_SANDBOX,
-    'webhook_id': PADDLE_WEBHOOK_ID
-}
 
 # PayTR Settings
 PAYTR_MERCHANT_ID = os.getenv('PAYTR_MERCHANT_ID', '')
 PAYTR_MERCHANT_KEY = os.getenv('PAYTR_MERCHANT_KEY', '')
 PAYTR_MERCHANT_SALT = os.getenv('PAYTR_MERCHANT_SALT', '')
-PAYTR_TEST_MODE = os.getenv('PAYTR_TEST_MODE', 'False').lower() in ('true', 't', 'yes', 'y', '1')
-
-# Debug PayTR ayarları
-print(f"DEBUG: PAYTR_TEST_MODE env value: {os.getenv('PAYTR_TEST_MODE')}")
-print(f"DEBUG: PAYTR_TEST_MODE setting: {PAYTR_TEST_MODE}")
-
-# PayTR ayarlarını dictionary olarak tutma
-PAYTR_SETTINGS = {
-    'merchant_id': PAYTR_MERCHANT_ID,
-    'merchant_key': PAYTR_MERCHANT_KEY,
-    'merchant_salt': PAYTR_MERCHANT_SALT,
-    'api_url': 'https://www.paytr.com/odeme/api',
-    'test_mode': PAYTR_TEST_MODE,
-}
+PAYTR_TEST_MODE = os.getenv('PAYTR_TEST_MODE', 'True').lower() == 'true'
 
 # CSRF ile ilgili eklediğimiz ayarları tamamen kaldıralım
 CSRF_TRUSTED_ORIGINS = [

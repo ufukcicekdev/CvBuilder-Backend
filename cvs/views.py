@@ -127,7 +127,7 @@ class CVBaseMixin:
         if request.data and 'language' in request.data:
             lang_code = request.data['language'].lower()
             if lang_code in self.SUPPORTED_LANGUAGES:
-                print(f"DEBUG: Using language from request data: {lang_code}")
+                # print(f"DEBUG: Using language from request data: {lang_code}")
                 return lang_code
         
         # Then try Accept-Language header
@@ -137,10 +137,10 @@ class CVBaseMixin:
             for lang in languages:
                 base_lang = lang.split('-')[0].lower()
                 if base_lang in self.SUPPORTED_LANGUAGES:
-                    print(f"DEBUG: Using language from Accept-Language header: {base_lang}")
+                    # print(f"DEBUG: Using language from Accept-Language header: {base_lang}")
                     return base_lang
         
-        print("DEBUG: No supported language found, defaulting to 'en'")
+        # print("DEBUG: No supported language found, defaulting to 'en'")
         return 'en'
 
     def _update_cv_data(self, instance, data, current_lang):
@@ -252,11 +252,13 @@ class CVBaseMixin:
                     current_translation.save()
                     
                 except (json.JSONDecodeError, ValueError) as e:
-                    print(f"JSON parsing error for correction: {str(e)}")
-                    print(f"Response was: {response_text}")
+                    # print(f"JSON parsing error for correction: {str(e)}")
+                    # print(f"Response was: {response_text}")
+                    pass
                     
             except Exception as e:
-                print(f"Correction error: {str(e)}")
+                # print(f"Correction error: {str(e)}")
+                pass
 
         # Then translate to other languages
         for lang_code, lang_name in self.SUPPORTED_LANGUAGES.items():
@@ -316,11 +318,13 @@ class CVBaseMixin:
                                 setattr(translation, field, field_value)
                             
                     except (json.JSONDecodeError, ValueError) as e:
-                        print(f"JSON parsing error for {lang_code}: {str(e)}")
-                        print(f"Response was: {response_text}")
+                        # print(f"JSON parsing error for {lang_code}: {str(e)}")
+                        # print(f"Response was: {response_text}")
+                        pass
                         
                 except Exception as e:
-                    print(f"Translation error for {lang_code}: {str(e)}")
+                    # print(f"Translation error for {lang_code}: {str(e)}")
+                    pass
 
                 translation.save()
 
@@ -509,7 +513,8 @@ class CVListCreateView(generics.ListCreateAPIView):
         except Exception as e:
             # Bu kısımda sadece log tutuyoruz, kullanıcının CV oluşturmasını engellemiyor
             # kütüphane yoksa veya başka bir hata varsa
-            print(f"Error checking subscription status during CV creation: {str(e)}")
+            # print(f"Error checking subscription status during CV creation: {str(e)}")
+            pass
         
         # CV'yi oluştur
         serializer.save(user=user)
@@ -527,7 +532,7 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
         
         # Get language code from Accept-Language header
         lang_code = self._get_language_code(request)
-        print(f"Requested language code: {lang_code}")  # Debug log
+        # print(f"Requested language code: {lang_code}")  # Debug log
         
         try:
             # Try to get existing translation
@@ -535,7 +540,7 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
                 cv=instance,
                 language_code=lang_code
             )
-            print(f"Found existing translation for {lang_code}")  # Debug log
+            # print(f"Found existing translation for {lang_code}")  # Debug log
             
             # Check if content language matches requested language
             content_fields = ['personal_info', 'education', 'experience', 'skills', 'languages', 'certificates', 'video_info']
@@ -556,14 +561,14 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
                     for lang, markers in language_markers.items():
                         if lang != lang_code:  # Skip current language markers
                             if any(marker in content for marker in markers):
-                                print(f"Found {lang} content in {field} for {lang_code} translation")
+                                # print(f"Found {lang} content in {field} for {lang_code} translation")
                                 needs_retranslation = True
                                 break
                     if needs_retranslation:
                         break
             
             if needs_retranslation:
-                print(f"Content language mismatch detected, retranslating to {lang_code}")
+                # print(f"Content language mismatch detected, retranslating to {lang_code}")
                 
                 # Get English translation as source
                 try:
@@ -597,10 +602,11 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
                         if lang_code == lang_code:  # Current language
                             translation = trans
                     except Exception as e:
-                        print(f"Error updating translation for {lang_code}: {str(e)}")
+                        # print(f"Error updating translation for {lang_code}: {str(e)}")
+                        pass
             
         except CVTranslation.DoesNotExist:
-            print(f"No translation found for {lang_code}, creating new one")  # Debug log
+            # print(f"No translation found for {lang_code}, creating new one")  # Debug log
             
             # Get English translation as source if available
             try:
@@ -646,7 +652,7 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
                     if code == lang_code:  # Current language
                         translation = trans
                 except Exception as e:
-                    print(f"Error creating translation for {code}: {str(e)}")
+                    # print(f"Error creating translation for {code}: {str(e)}")
                     if code == lang_code:  # Current language
                         translation = CVTranslation.objects.create(
                             cv=instance,
@@ -664,11 +670,11 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
         return Response(self._get_translated_data(instance, lang_code))
 
     def update(self, request, *args, **kwargs):
-        print("="*50)
-        print("UPDATE METODU ÇAĞRILDI 1")
-        print("REQUEST METHOD:", request.method)
-        print("REQUEST DATA:", request.data)
-        print("="*50)
+        # print("="*50)
+        # print("UPDATE METODU ÇAĞRILDI 1")
+        # print("REQUEST METHOD:", request.method)
+        # print("REQUEST DATA:", request.data)
+        # print("="*50)
         
         instance = self.get_object()
         current_lang = self._get_language_code(request)
@@ -677,18 +683,18 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
         
         # Template ID'yi request.data'dan al, yoksa varsayılan değer kullan
         template_id = request.data.get('template_id', 'web-template1')
-        print(f"Template ID: {template_id}")
+        # print(f"Template ID: {template_id}")
         
         # Güncellenmiş CV verilerini al
         cv_data = self._get_translated_data(instance, current_lang)
-        print("Güncellenmiş CV verileri alındı")
+        # print("Güncellenmiş CV verileri alındı")
         
         # WebSocket bildirimi gönder
         success = self._notify_cv_update(instance, current_lang, template_id)
         
         # Bildirim başarısız olduysa doğrudan channel layer kullanarak dene
         if not success:
-            print("Alternatif websocket bildirim yöntemi deneniyor...")
+            # print("Alternatif websocket bildirim yöntemi deneniyor...")
             try:
                 # Güncel verileri hazırla
                 # cv_data zaten Response objesi olabilir, dict'e çevirelim
@@ -702,7 +708,7 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
                 channel_layer = get_channel_layer()
                 group_name = get_cv_group_name(instance.id, instance.translation_key, current_lang, template_id)
                 
-                print(f"Alternatif yöntem için grup adı: {group_name}")
+                # print(f"Alternatif yöntem için grup adı: {group_name}")
                 
                 # Tüm consumer'lara doğrudan mesaj gönder
                 from asgiref.sync import async_to_sync
@@ -730,19 +736,19 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
                         }
                     }
                 )
-                print("Alternatif websocket bildirimi başarıyla gönderildi")
+                # print("Alternatif websocket bildirimi başarıyla gönderildi")
             except Exception as e:
-                print(f"Alternatif websocket bildirimi gönderilirken hata oluştu: {str(e)}")
+                # print(f"Alternatif websocket bildirimi gönderilirken hata oluştu: {str(e)}")
                 import traceback
                 traceback.print_exc()
         
         return Response(cv_data)
 
     def patch(self, request, *args, **kwargs):
-        print("="*50)
-        print("PATCH METODU ÇAĞRILDI")
-        print("REQUEST DATA:", request.data)
-        print("="*50)
+        # print("="*50)
+        # print("PATCH METODU ÇAĞRILDI")
+        # print("REQUEST DATA:", request.data)
+        # print("="*50)
         return self.update(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'])
@@ -1066,26 +1072,26 @@ class CVDetailView(CVBaseMixin, generics.RetrieveUpdateDestroyAPIView):
             )    
     @action(detail=True, methods=['delete'], url_path='delete-video')
     def delete_video(self, request, pk=None):
-        print("="*50)
-        print("VIDEO SİLME İSTEĞİ GELDİ")
-        print("CV ID:", pk)
+        # print("="*50)
+        # print("VIDEO SİLME İSTEĞİ GELDİ")
+        # print("CV ID:", pk)
      
         cv = self.get_object()
-        print("CV BULUNDU:", cv.id)
-        print("CV'nin videosu var mı?", bool(cv.video))
+        # print("CV BULUNDU:", cv.id)
+        # print("CV'nin videosu var mı?", bool(cv.video))
         if cv.video:
-            print("Video URL:", cv.video.url)
-            print("Video açıklaması:", cv.video_description)
-            print("Video bilgileri:", cv.video_info)
+            # print("Video URL:", cv.video.url)
+            # print("Video açıklaması:", cv.video_description)
+            # print("Video bilgileri:", cv.video_info)
          
             cv.video.delete()
             cv.video_description = ''
             cv.video_info = {}
             cv.save()
-            print("Video silindi ve bilgiler temizlendi")
+            # print("Video silindi ve bilgiler temizlendi")
             return Response(status=status.HTTP_204_NO_CONTENT)
          
-        print("Video bulunamadı")
+        # print("Video bulunamadı")
         return Response({'error': 'Video not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
@@ -1157,11 +1163,11 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
         return CV.objects.prefetch_related('translations').filter(user=self.request.user)
 
     def update(self, request, *args, **kwargs):
-        print("="*50)
-        print("UPDATE METODU ÇAĞRILDI 1")
-        print("REQUEST METHOD:", request.method)
-        print("REQUEST DATA:", request.data)
-        print("="*50)
+        # print("="*50)
+        # print("UPDATE METODU ÇAĞRILDI 1")
+        # print("REQUEST METHOD:", request.method)
+        # print("REQUEST DATA:", request.data)
+        # print("="*50)
         
         instance = self.get_object()
         current_lang = self._get_language_code(request)
@@ -1170,18 +1176,18 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
         
         # Template ID'yi request.data'dan al, yoksa varsayılan değer kullan
         template_id = request.data.get('template_id', 'web-template1')
-        print(f"Template ID: {template_id}")
+        # print(f"Template ID: {template_id}")
         
         # Güncellenmiş CV verilerini al
         cv_data = self._get_translated_data(instance, current_lang)
-        print("Güncellenmiş CV verileri alındı")
+        # print("Güncellenmiş CV verileri alındı")
         
         # WebSocket bildirimi gönder
         success = self._notify_cv_update(instance, current_lang, template_id)
         
         # Bildirim başarısız olduysa doğrudan channel layer kullanarak dene
         if not success:
-            print("Alternatif websocket bildirim yöntemi deneniyor...")
+            # print("Alternatif websocket bildirim yöntemi deneniyor...")
             try:
                 # Güncel verileri hazırla
                 # cv_data zaten Response objesi olabilir, dict'e çevirelim
@@ -1196,7 +1202,7 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
                 group_name = get_cv_group_name(instance.id, instance.translation_key, current_lang, template_id)
                 
                 
-                print(f"Alternatif yöntem için grup adı: {group_name}")
+                # print(f"Alternatif yöntem için grup adı: {group_name}")
                 
                 # Tüm consumer'lara doğrudan mesaj gönder
                 from asgiref.sync import async_to_sync
@@ -1224,9 +1230,9 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
                         }
                     }
                 )
-                print("Alternatif websocket bildirimi başarıyla gönderildi")
+                # print("Alternatif websocket bildirimi başarıyla gönderildi")
             except Exception as e:
-                print(f"Alternatif websocket bildirimi gönderilirken hata oluştu: {str(e)}")
+                # print(f"Alternatif websocket bildirimi gönderilirken hata oluştu: {str(e)}")
                 import traceback
                 traceback.print_exc()
         
@@ -1326,7 +1332,7 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
                                 translated_certificates.append(translated_cert)
                                 
                             except Exception as e:
-                                print(f"Error translating certificate: {str(e)}")
+                                # print(f"Error translating certificate: {str(e)}")
                                 translated_certificates.append(cert)
                         
                         translated_content[field] = translated_certificates
@@ -1367,7 +1373,7 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
                     translation.save()
                     
                 except Exception as e:
-                    print(f"Error saving translation for {lang_code}: {str(e)}")
+                    # print(f"Error saving translation for {lang_code}: {str(e)}")
                     # Hata durumunda orijinal içerikle kaydet
                     translation, _ = CVTranslation.objects.get_or_create(
                         cv=cv_instance,
@@ -1376,7 +1382,7 @@ class CVViewSet(CVBaseMixin, viewsets.ModelViewSet):
                     )
                     
         except Exception as e:
-            print(f"Error in create_translations_for_all_languages: {str(e)}")
+            # print(f"Error in create_translations_for_all_languages: {str(e)}")
             # Hata durumunda tüm diller için orijinal içerikle kaydet
             for lang_code in self.SUPPORTED_LANGUAGES.keys():
                 CVTranslation.objects.get_or_create(
