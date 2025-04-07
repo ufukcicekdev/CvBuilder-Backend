@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'storages',
     'subscriptions',
     'cv_templates',
+    'scheduler',
 ]
 
 MIDDLEWARE = [
