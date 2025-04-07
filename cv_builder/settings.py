@@ -392,6 +392,7 @@ PADDLE_PUBLIC_KEY = os.getenv('PADDLE_PUBLIC_KEY', 'your_public_key')  # For web
 PADDLE_WEBHOOK_SECRET = os.getenv('PADDLE_WEBHOOK_SECRET', 'CPoIBViuCqYpIFY...')
 PADDLE_SANDBOX = os.getenv('PADDLE_SANDBOX', 'true').lower() == 'true'
 PADDLE_WEBHOOK_ID = os.getenv('PADDLE_WEBHOOK_ID', '')  # Webhook ID for verification
+PADDLE_VENDOR_AUTH_CODE = os.getenv('PADDLE_VENDOR_AUTH_CODE', 'your_auth_code')
 
 # PayTR Settings
 PAYTR_MERCHANT_ID = os.getenv('PAYTR_MERCHANT_ID', '')
