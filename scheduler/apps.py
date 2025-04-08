@@ -11,9 +11,9 @@ class SchedulerConfig(AppConfig):
 
     def ready(self):
         # Prevent scheduler from running twice in development
-        if settings.DEBUG and (len(sys.argv) > 1 and sys.argv[1] == 'runserver'):
-            return
-            
+       
+       
+       
         from scheduler.tasks import (
             send_cv_completion_reminder,
             send_trial_ending_notification,
