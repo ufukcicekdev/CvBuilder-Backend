@@ -10,8 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'your-default-secret-key')
 
-DEBUG = True
-
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
@@ -116,6 +115,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "https://cvbuilder.tech",
     "https://www.cvbuilder.tech",
+    "https://web-production-9f41e.up.railway.app",
+    "http://localhost:8000",
 ]
 
 CORS_ALLOW_METHODS = [
