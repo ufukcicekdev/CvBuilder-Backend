@@ -97,7 +97,7 @@ def send_cv_completion_reminder():
                         </ul>
                         
                         <center>
-                            <a href="{settings.FRONTEND_URL}/cv/{cv.id}" class="cta-button">
+                            <a href="{settings.FRONTEND_URL}/dashboard" class="cta-button">
                                 Continue Building Your CV
                             </a>
                         </center>
@@ -129,7 +129,7 @@ def send_cv_completion_reminder():
             * Highlight your key skills
             * Showcase your achievements
 
-            Continue building your CV here: {settings.FRONTEND_URL}/cv/{cv.id}
+            Continue building your CV here: {settings.FRONTEND_URL}/dashboard
 
             Best regards,
             CV Builder Team
@@ -250,7 +250,7 @@ def send_trial_ending_notification():
                         </div>
                         
                         <center>
-                            <a href="{settings.FRONTEND_URL}/upgrade" class="cta-button">
+                            <a href="{settings.FRONTEND_URL}/pricing" class="cta-button">
                                 Upgrade to Premium
                             </a>
                         </center>
@@ -283,7 +283,7 @@ def send_trial_ending_notification():
             * Unlimited Updates
             * Portfolio Features
 
-            Upgrade to Premium now: {settings.FRONTEND_URL}/upgrade
+            Upgrade to Premium now: {settings.FRONTEND_URL}/pricing
 
             Best regards,
             CV Builder Team
@@ -426,7 +426,7 @@ def send_trial_ended_notification():
                         </div>
                         
                         <center>
-                            <a href="{settings.FRONTEND_URL}/upgrade" class="cta-button">
+                            <a href="{settings.FRONTEND_URL}/pricing" class="cta-button">
                                 UPGRADE TO PREMIUM
                             </a>
                         </center>
@@ -465,7 +465,7 @@ def send_trial_ended_notification():
             "CV Builder helped me land my dream job at a top tech company. The premium features made my CV stand out from other applicants!"
             - Sarah M., Software Engineer
 
-            Upgrade to Premium now: {settings.FRONTEND_URL}/upgrade
+            Upgrade to Premium now: {settings.FRONTEND_URL}/pricing
 
             Best regards,
             CV Builder Team
