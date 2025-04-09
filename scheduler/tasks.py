@@ -23,7 +23,7 @@ def send_cv_completion_reminder():
     """
     Send email reminders to users whose CVs are incomplete (step < 6)
     """
-    incomplete_cvs = CV.objects.filter(current_step__lt=6).select_related('user')
+    incomplete_cvs = CV.objects.filter(current_step__lt=6, user__is_active=True).select_related('user')
     
     for cv in incomplete_cvs:
         user = cv.user
@@ -152,7 +152,8 @@ def send_trial_ending_notification():
     three_days_from_now = timezone.now() + timedelta(days=3)
     trial_users = User.objects.filter(
         Q(date_joined__lte=three_days_from_now) &
-        Q(date_joined__gt=timezone.now() - timedelta(days=14))  # Trial period is 14 days
+        Q(date_joined__gt=timezone.now() - timedelta(days=14)) &  # Trial period is 14 days
+        Q(is_active=True)
     )
     
     for user in trial_users:
