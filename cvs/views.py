@@ -48,7 +48,8 @@ class CVBaseMixin:
         'es': 'Spanish',
         'zh': 'Chinese',
         'ar': 'Arabic',
-        'hi': 'Hindi'
+        'hi': 'Hindi',
+        'de': 'German'
     }
 
     def _get_text_fields_for_type(self, field_type):

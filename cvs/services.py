@@ -14,7 +14,8 @@ class TranslationService:
         'es': 'Spanish',
         'zh': 'Chinese',
         'ar': 'Arabic',
-        'hi': 'Hindi'
+        'hi': 'Hindi',
+        'de': 'German'
     }
 
     def translate_cv_content(self, cv_data, target_language, fix_grammar=False):
@@ -358,7 +359,8 @@ class TranslationService:
                 "es": cv_data,
                 "zh": cv_data,
                 "ar": cv_data,
-                "hi": cv_data
+                "hi": cv_data,
+                "de": cv_data
             }, indent=2)
             
             # OpenAI API'ye gönderilecek sistem mesajı

@@ -91,7 +91,8 @@ class CVTranslation(models.Model):
         ('es', 'Español'),
         ('zh', '中文'),
         ('ar', 'العربية'),
-        ('hi', 'हिन्दी')
+        ('hi', 'हिन्दी'),
+        ('de', 'Deutsch')
     ]
 
     cv = models.ForeignKey(CV, on_delete=models.CASCADE, related_name='translations')
