@@ -43,8 +43,8 @@ def google_auth(request):
         try:
             user = User.objects.get(email=email)
 
-            if not user.email_verified:
-                user.email_verified = True
+            if not user.is_email_verified:
+                user.is_email_verified = True
                 user.save()
 
             if not user.paddle_customer_id:
@@ -63,7 +63,7 @@ def google_auth(request):
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
-                email_verified=True,
+                is_email_verified=True,
                 auth_provider='google'
             )
 
