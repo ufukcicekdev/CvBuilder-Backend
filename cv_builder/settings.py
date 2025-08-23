@@ -113,8 +113,8 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://cvbuilder.tech",
-    "https://www.cvbuilder.tech",
+    "https://cvbuilder.dev",
+    "https://www.cvbuilder.dev",
     "https://web-production-9f41e.up.railway.app",
     "http://localhost:8000",
 ]
@@ -148,8 +148,8 @@ CORS_ALLOWED_ORIGINS_WEBSOCKET = [
     "wss://127.0.0.1:3000",
     "ws://localhost:8000",
     "ws://127.0.0.1:8000",
-    "wss://cvbuilder.tech",
-    "wss://www.cvbuilder.tech",
+    "wss://cvbuilder.dev",
+    "wss://www.cvbuilder.dev",
     "wss://web-production-9f41e.up.railway.app",
 ]
 
@@ -327,15 +327,15 @@ CHANNEL_SECURITY = {
     'ALLOWED_HOSTS': [
         'localhost',
         '127.0.0.1',
-        'cvbuilder.tech',
-        'www.cvbuilder.tech',
+        'cvbuilder.dev',
+        'www.cvbuilder.dev',
         'web-production-9f41e.up.railway.app',
     ],
     'ALLOWED_ORIGINS': [
         'http://localhost:3000',
         'http://127.0.0.1:3000',
-        'https://cvbuilder.tech',
-        'https://www.cvbuilder.tech',
+        'https://cvbuilder.dev',
+        'https://www.cvbuilder.dev',
         'https://web-production-9f41e.up.railway.app',
         'ws://localhost:3000',
         'ws://127.0.0.1:3000',
@@ -343,8 +343,8 @@ CHANNEL_SECURITY = {
         'wss://127.0.0.1:3000',
         'ws://localhost:8000',
         'ws://127.0.0.1:8000',
-        'wss://cvbuilder.tech',
-        'wss://www.cvbuilder.tech',
+        'wss://cvbuilder.dev',
+        'wss://www.cvbuilder.dev',
         'wss://web-production-9f41e.up.railway.app',
     ],
 }
@@ -405,6 +405,6 @@ PAYTR_TEST_MODE = os.getenv('PAYTR_TEST_MODE', 'True').lower() == 'true'
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://cvbuilder.tech",
-    "https://www.cvbuilder.tech",
+    "https://cvbuilder.dev",
+    "https://www.cvbuilder.dev",
 ]
