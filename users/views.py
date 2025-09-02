@@ -583,3 +583,29 @@ def reset_password(request):
     
     except PasswordResetToken.DoesNotExist:
         return Response({'error': 'Geçersiz token'}, status=status.HTTP_400_BAD_REQUEST) 
+    
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def session_view(request):
+    """
+    Kullanıcının oturum bilgisini ve token bilgisini döner
+    """
+    user = request.user
+    if user.is_authenticated:
+        # Mevcut kullanıcı için refresh ve access token oluştur
+        refresh = RefreshToken.for_user(user)
+        access = str(refresh.access_token)
+
+        data = {
+            "isAuthenticated": True,
+            "username": user.username,
+            "email": user.email,
+            "accessToken": access,
+            "refreshToken": str(refresh),
+        }
+    else:
+        data = {"isAuthenticated": False}
+
+    return Response(data)
