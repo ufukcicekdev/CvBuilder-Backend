@@ -30,6 +30,8 @@ deep-translator==1.11.4
 defusedxml==0.8.0rc2
 distro==1.9.0
 Django==5.1.6
+django-autoslug==1.9.9
+django-ckeditor-5==0.2.8
 django-cors-headers==4.6.0
 django-scheduler==0.10.1
 django-storages==1.14
