@@ -64,7 +64,7 @@ def google_auth(request):
                 first_name=first_name,
                 last_name=last_name,
                 is_email_verified=True,
-                auth_provider='google'
+                social_provider='google'
             )
 
             try:
