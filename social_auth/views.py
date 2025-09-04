@@ -76,7 +76,7 @@ def google_auth(request):
             except Exception as e:
                 pass
 
-            from users.models import Profile
+            from profiles.models import Profile
             Profile.objects.create(
                 user=user,
                 language='en'
