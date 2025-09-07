@@ -4,7 +4,7 @@ from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
 from django.db.models import F
 from .models import BlogPost, BlogTranslation
-from .serializers import BlogPostSerializer, BlogPostDetailSerializer
+from .serializers import BlogPostSerializer, BlogPostDetailSerializer, BlogPostCreateSerializer
 
 class BlogListView(generics.ListAPIView):
     """
@@ -53,3 +53,16 @@ class BlogDetailView(generics.RetrieveAPIView):
         # Attach the found translation to the post object for the serializer
         post.translation = translation
         return post
+
+
+
+# ... diğer view'larınızın altına ekleyin ...
+
+class BlogPostCreateView(generics.CreateAPIView):
+    """
+    POST isteklerini kabul ederek yeni bir blog gönderisi ve çevirilerini oluşturur.
+    """
+    queryset = BlogPost.objects.all()
+    serializer_class = BlogPostCreateSerializer
+    # Production'da burayı IsAuthenticated gibi bir yetkiyle değiştirin
+    permission_classes = [AllowAny] 

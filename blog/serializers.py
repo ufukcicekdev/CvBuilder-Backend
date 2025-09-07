@@ -22,3 +22,21 @@ class BlogPostDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = BlogPost
         fields = ['id', 'slug', 'status', 'created_at', 'updated_at', 'view_count', 'language', 'title', 'content']
+
+
+
+# ... diğer serializer'larınızın altına ekleyin ...
+
+class BlogPostCreateSerializer(serializers.ModelSerializer):
+    translations = BlogTranslationSerializer(many=True)
+
+    class Meta:
+        model = BlogPost
+        fields = ['slug', 'status', 'translations']
+
+    def create(self, validated_data):
+        translations_data = validated_data.pop('translations')
+        blog_post = BlogPost.objects.create(**validated_data)
+        for translation_data in translations_data:
+            BlogTranslation.objects.create(post=blog_post, **translation_data)
+        return blog_post

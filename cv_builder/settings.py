@@ -106,6 +106,14 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    # DİĞER AYARLARINIZIN ALTINA BU İKİ SATIRI EKLEYİN:
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ] if not DEBUG else [
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ],
+    'DEFAULT_ROUTER_CLASS': 'rest_framework.routers.SimpleRouter' if not DEBUG else 'rest_framework.routers.DefaultRouter',
 }
 
 # CORS ayarları
