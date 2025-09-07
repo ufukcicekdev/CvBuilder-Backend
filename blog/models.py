@@ -8,13 +8,20 @@ class BlogPost(models.Model):
         DRAFT = 'DF', 'Draft'
         PUBLISHED = 'PB', 'Published'
 
-    slug = models.SlugField(max_length=200, unique=True, help_text="The unique identifier for a post, shared across all translations.")
+    slug = models.SlugField(
+        max_length=255, 
+        unique=True, 
+        blank=True, 
+        null=True, 
+        help_text="The unique identifier for a post. Generated automatically from the title of the first translation."
+    )
     status = models.CharField(max_length=2, choices=Status.choices, default=Status.DRAFT)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    view_count = models.PositiveIntegerField(default=0, help_text="The number of times the post has been viewed.")
 
     def __str__(self):
-        return self.slug
+        return self.slug or f"Post (ID: {self.id})"
 
 class BlogTranslation(models.Model):
     class Language(models.TextChoices):
@@ -35,4 +42,18 @@ class BlogTranslation(models.Model):
         unique_together = ('post', 'language')
 
     def __str__(self):
-        return f"{self.post.slug} ({self.get_language_display()})"
+        display_slug = self.post.slug or f"Post (ID: {self.post.id})"
+        return f"{display_slug} ({self.get_language_display()})"
+
+    def save(self, *args, **kwargs):
+        if not self.post.slug:
+            base_slug = slugify(self.title)
+            slug = base_slug
+            counter = 1
+            while BlogPost.objects.filter(slug=slug).exists():
+                slug = f'{base_slug}-{counter}'
+                counter += 1
+            self.post.slug = slug
+            self.post.save()
+        
+        super(BlogTranslation, self).save(*args, **kwargs)

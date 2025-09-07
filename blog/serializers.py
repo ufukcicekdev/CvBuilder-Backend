@@ -11,7 +11,7 @@ class BlogPostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlogPost
-        fields = ['id', 'slug', 'status', 'created_at', 'updated_at', 'translations']
+        fields = ['id', 'slug', 'status', 'created_at', 'updated_at', 'view_count', 'translations']
 
 class BlogPostDetailSerializer(serializers.ModelSerializer):
     # This serializer is for the detail view, showing only one translation
@@ -21,4 +21,4 @@ class BlogPostDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlogPost
-        fields = ['id', 'slug', 'status', 'created_at', 'updated_at', 'language', 'title', 'content']
+        fields = ['id', 'slug', 'status', 'created_at', 'updated_at', 'view_count', 'language', 'title', 'content']

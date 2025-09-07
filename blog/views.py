@@ -2,6 +2,7 @@
 from rest_framework import generics
 from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
+from django.db.models import F
 from .models import BlogPost, BlogTranslation
 from .serializers import BlogPostSerializer, BlogPostDetailSerializer
 
@@ -28,6 +29,11 @@ class BlogDetailView(generics.RetrieveAPIView):
     def get_object(self):
         # Get the parent BlogPost object using the slug
         post = super().get_object()
+
+        # Increment the view count atomically
+        post.view_count = F('view_count') + 1
+        post.save(update_fields=['view_count'])
+        post.refresh_from_db()
 
         # Get the requested language from query params, default to 'en'
         lang_code = self.request.query_params.get('lang', 'en')
