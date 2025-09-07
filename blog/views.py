@@ -1,6 +1,6 @@
 
 from rest_framework import generics
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.db.models import F
 from .models import BlogPost, BlogTranslation
@@ -65,4 +65,4 @@ class BlogPostCreateView(generics.CreateAPIView):
     queryset = BlogPost.objects.all()
     serializer_class = BlogPostCreateSerializer
     # Production'da burayı IsAuthenticated gibi bir yetkiyle değiştirin
-    permission_classes = [AllowAny] 
+    permission_classes = [IsAuthenticated] 

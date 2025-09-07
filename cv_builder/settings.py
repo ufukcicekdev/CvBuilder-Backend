@@ -11,6 +11,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'your-default-secret-key')
 
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
+N8N_API_KEY = os.getenv('N8N_API_KEY')
+
 ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
@@ -23,6 +25,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # Third party apps
     'rest_framework',
+    'rest_framework.authtoken',
     'corsheaders',
     'channels',
     'django_ckeditor_5',
@@ -102,6 +105,8 @@ AUTH_USER_MODEL = 'users.User'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
+        'cv_builder.authentication.StaticAPIKeyAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
